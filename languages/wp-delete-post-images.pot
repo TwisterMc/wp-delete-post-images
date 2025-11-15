@@ -1,0 +1,148 @@
+# Copyright (C) 2025 Thomas McMahon
+# This file is distributed under the same license as the Delete Attached Media on Post Deletion plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: Delete Attached Media on Post Deletion 1.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-delete-post-images\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2025-11-15T00:00:00+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.9.0\n"
+"X-Domain: wp-delete-post-images\n"
+
+#: wp-delete-post-images.php
+msgid "Delete Post Media Settings"
+msgstr ""
+
+msgid "Delete Post Media"
+msgstr ""
+
+msgid "Performance Settings"
+msgstr ""
+
+msgid "Control which scans run when checking if an attachment is used elsewhere. Disable heavy scans to improve performance during bulk deletions."
+msgstr ""
+
+msgid "Scan Post Content (REGEXP)"
+msgstr ""
+
+msgid "Search for attachment IDs in post content/excerpt using REGEXP (wp-image-, attachment_, Gutenberg JSON, etc.)."
+msgstr ""
+
+msgid "Scan Post Content (Filename)"
+msgstr ""
+
+msgid "Search for filename matches in post content/excerpt (covers direct links and sized variants)."
+msgstr ""
+
+msgid "Scan Postmeta (ID)"
+msgstr ""
+
+msgid "Search for numeric attachment IDs in postmeta values (including serialized data)."
+msgstr ""
+
+msgid "Scan Postmeta (URL)"
+msgstr ""
+
+msgid "Search for attachment URLs in postmeta values (e.g., custom fields, page builders)."
+msgstr ""
+
+msgid "Deep Scans (Optional)"
+msgstr ""
+
+msgid "These scans search additional database tables. Only enable if you store attachment URLs in these locations. May impact performance on large sites."
+msgstr ""
+
+msgid "Scan Term Meta for URLs"
+msgstr ""
+
+msgid "Search for attachment URLs in term metadata. May impact performance on large sites."
+msgstr ""
+
+msgid "Scan Options for URLs"
+msgstr ""
+
+msgid "Search for attachment URLs in site options. May impact performance."
+msgstr ""
+
+msgid "Scan Comments for URLs"
+msgstr ""
+
+msgid "Search for attachment URLs in comment content. May impact performance."
+msgstr ""
+
+msgid "Supported Post Types"
+msgstr ""
+
+msgid "By default, the plugin processes all post types except revisions, nav menu items, and attachments. Select specific post types to limit which posts trigger media cleanup."
+msgstr ""
+
+msgid "Limit to Post Types"
+msgstr ""
+
+msgid "Select post types to process"
+msgstr ""
+
+msgid "No public post types found."
+msgstr ""
+
+msgid "Leave empty to process all post types (except revisions, nav menu items, and attachments)."
+msgstr ""
+
+msgid "Protected Attachments"
+msgstr ""
+
+msgid "Specify attachment IDs that should never be deleted, regardless of usage detection."
+msgstr ""
+
+msgid "Protected Attachment IDs"
+msgstr ""
+
+msgid "Enter comma-separated attachment IDs"
+msgstr ""
+
+msgid "e.g., 123, 456, 789"
+msgstr ""
+
+msgid "Enter attachment IDs separated by commas. These attachments will never be deleted by this plugin."
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Settings saved."
+msgstr ""
+
+msgid "Save Settings"
+msgstr ""
+
+msgid "How It Works"
+msgstr ""
+
+msgid "When a post is permanently deleted, this plugin automatically deletes attached media files—but only if they are not used anywhere else on your site."
+msgstr ""
+
+msgid "Checks Performed"
+msgstr ""
+
+msgid "Featured image of another post"
+msgstr ""
+
+msgid "Site icon or custom logo"
+msgstr ""
+
+msgid "Referenced in post content/excerpt (IDs, classes, filenames)"
+msgstr ""
+
+msgid "Stored in postmeta (IDs or URLs)"
+msgstr ""
+
+msgid "Optionally: term meta, options, and comments (if enabled above)"
+msgstr ""
+
+msgid "The plugin performs conservative checks to avoid accidental data loss. If any check suggests the file may be in use, it will not be deleted."
+msgstr ""

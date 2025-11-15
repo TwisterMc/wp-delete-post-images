@@ -1,0 +1,150 @@
+# Copyright (C) 2025 Thomas McMahon
+# This file is distributed under the same license as the Delete Attached Media on Post Deletion plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: Delete Attached Media on Post Deletion 1.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-delete-post-images\n"
+"Last-Translator: \n"
+"Language-Team: Spanish\n"
+"Language: es_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2025-11-15T00:00:00+00:00\n"
+"PO-Revision-Date: 2025-11-15T00:00:00+00:00\n"
+"X-Generator: WP-CLI 2.9.0\n"
+"X-Domain: wp-delete-post-images\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: wp-delete-post-images.php
+msgid "Delete Post Media Settings"
+msgstr "Configuración de Eliminación de Medios"
+
+msgid "Delete Post Media"
+msgstr "Eliminar Medios"
+
+msgid "Performance Settings"
+msgstr "Configuración de Rendimiento"
+
+msgid "Control which scans run when checking if an attachment is used elsewhere. Disable heavy scans to improve performance during bulk deletions."
+msgstr "Controla qué escaneos se ejecutan al verificar si un adjunto se usa en otro lugar. Desactiva los escaneos pesados para mejorar el rendimiento durante eliminaciones masivas."
+
+msgid "Scan Post Content (REGEXP)"
+msgstr "Escanear Contenido de Entradas (REGEXP)"
+
+msgid "Search for attachment IDs in post content/excerpt using REGEXP (wp-image-, attachment_, Gutenberg JSON, etc.)."
+msgstr "Buscar IDs de adjuntos en contenido/extracto de entradas usando REGEXP (wp-image-, attachment_, JSON de Gutenberg, etc.)."
+
+msgid "Scan Post Content (Filename)"
+msgstr "Escanear Contenido de Entradas (Nombre de Archivo)"
+
+msgid "Search for filename matches in post content/excerpt (covers direct links and sized variants)."
+msgstr "Buscar coincidencias de nombre de archivo en contenido/extracto de entradas (incluye enlaces directos y variantes de tamaño)."
+
+msgid "Scan Postmeta (ID)"
+msgstr "Escanear Postmeta (ID)"
+
+msgid "Search for numeric attachment IDs in postmeta values (including serialized data)."
+msgstr "Buscar IDs numéricos de adjuntos en valores de postmeta (incluyendo datos serializados)."
+
+msgid "Scan Postmeta (URL)"
+msgstr "Escanear Postmeta (URL)"
+
+msgid "Search for attachment URLs in postmeta values (e.g., custom fields, page builders)."
+msgstr "Buscar URLs de adjuntos en valores de postmeta (ej., campos personalizados, constructores de páginas)."
+
+msgid "Deep Scans (Optional)"
+msgstr "Escaneos Profundos (Opcional)"
+
+msgid "These scans search additional database tables. Only enable if you store attachment URLs in these locations. May impact performance on large sites."
+msgstr "Estos escaneos buscan en tablas adicionales de la base de datos. Activa solo si almacenas URLs de adjuntos en estas ubicaciones. Puede afectar el rendimiento en sitios grandes."
+
+msgid "Scan Term Meta for URLs"
+msgstr "Escanear Meta de Términos por URLs"
+
+msgid "Search for attachment URLs in term metadata. May impact performance on large sites."
+msgstr "Buscar URLs de adjuntos en metadatos de términos. Puede afectar el rendimiento en sitios grandes."
+
+msgid "Scan Options for URLs"
+msgstr "Escanear Opciones por URLs"
+
+msgid "Search for attachment URLs in site options. May impact performance."
+msgstr "Buscar URLs de adjuntos en opciones del sitio. Puede afectar el rendimiento."
+
+msgid "Scan Comments for URLs"
+msgstr "Escanear Comentarios por URLs"
+
+msgid "Search for attachment URLs in comment content. May impact performance."
+msgstr "Buscar URLs de adjuntos en contenido de comentarios. Puede afectar el rendimiento."
+
+msgid "Supported Post Types"
+msgstr "Tipos de Entrada Admitidos"
+
+msgid "By default, the plugin processes all post types except revisions, nav menu items, and attachments. Select specific post types to limit which posts trigger media cleanup."
+msgstr "Por defecto, el plugin procesa todos los tipos de entrada excepto revisiones, elementos de menú de navegación y adjuntos. Selecciona tipos de entrada específicos para limitar qué entradas activan la limpieza de medios."
+
+msgid "Limit to Post Types"
+msgstr "Limitar a Tipos de Entrada"
+
+msgid "Select post types to process"
+msgstr "Selecciona tipos de entrada para procesar"
+
+msgid "No public post types found."
+msgstr "No se encontraron tipos de entrada públicos."
+
+msgid "Leave empty to process all post types (except revisions, nav menu items, and attachments)."
+msgstr "Deja vacío para procesar todos los tipos de entrada (excepto revisiones, elementos de menú de navegación y adjuntos)."
+
+msgid "Protected Attachments"
+msgstr "Adjuntos Protegidos"
+
+msgid "Specify attachment IDs that should never be deleted, regardless of usage detection."
+msgstr "Especifica IDs de adjuntos que nunca deben eliminarse, independientemente de la detección de uso."
+
+msgid "Protected Attachment IDs"
+msgstr "IDs de Adjuntos Protegidos"
+
+msgid "Enter comma-separated attachment IDs"
+msgstr "Ingresa IDs de adjuntos separados por comas"
+
+msgid "e.g., 123, 456, 789"
+msgstr "ej., 123, 456, 789"
+
+msgid "Enter attachment IDs separated by commas. These attachments will never be deleted by this plugin."
+msgstr "Ingresa IDs de adjuntos separados por comas. Estos adjuntos nunca serán eliminados por este plugin."
+
+msgid "Enable"
+msgstr "Activar"
+
+msgid "Settings saved."
+msgstr "Configuración guardada."
+
+msgid "Save Settings"
+msgstr "Guardar Configuración"
+
+msgid "How It Works"
+msgstr "Cómo Funciona"
+
+msgid "When a post is permanently deleted, this plugin automatically deletes attached media files—but only if they are not used anywhere else on your site."
+msgstr "Cuando una entrada se elimina permanentemente, este plugin elimina automáticamente los archivos de medios adjuntos, pero solo si no se usan en ningún otro lugar de tu sitio."
+
+msgid "Checks Performed"
+msgstr "Verificaciones Realizadas"
+
+msgid "Featured image of another post"
+msgstr "Imagen destacada de otra entrada"
+
+msgid "Site icon or custom logo"
+msgstr "Icono del sitio o logotipo personalizado"
+
+msgid "Referenced in post content/excerpt (IDs, classes, filenames)"
+msgstr "Referenciado en contenido/extracto de entradas (IDs, clases, nombres de archivo)"
+
+msgid "Stored in postmeta (IDs or URLs)"
+msgstr "Almacenado en postmeta (IDs o URLs)"
+
+msgid "Optionally: term meta, options, and comments (if enabled above)"
+msgstr "Opcionalmente: meta de términos, opciones y comentarios (si están activados arriba)"
+
+msgid "The plugin performs conservative checks to avoid accidental data loss. If any check suggests the file may be in use, it will not be deleted."
+msgstr "El plugin realiza verificaciones conservadoras para evitar la pérdida accidental de datos. Si alguna verificación sugiere que el archivo puede estar en uso, no se eliminará."

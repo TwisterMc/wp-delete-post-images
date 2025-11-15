@@ -150,6 +150,15 @@ All settings can also be controlled programmatically via filters:
 
 - Requires WordPress 5.6+ and PHP 7.4+.
 
+## Translation
+
+The plugin is fully translatable and includes:
+
+- Spanish (es_ES) translation included
+- POT file for creating additional translations at `languages/wp-delete-post-images.pot`
+
+To contribute translations, copy the `.pot` file to a new `.po` file with your locale (e.g., `wp-delete-post-images-fr_FR.po`), translate the strings, and compile to `.mo` using a tool like Poedit or `msgfmt`.
+
 ## Changelog
 
 ### 1.0.0

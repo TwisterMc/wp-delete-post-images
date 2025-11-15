@@ -5,6 +5,7 @@
  * Version: 1.0.0
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
+ * Domain Path: /languages
  * Requires at least: 5.6
  * Requires PHP: 7.4
  */
@@ -17,6 +18,24 @@ if ( ! \defined( 'ABSPATH' ) ) {
 }
 
 use WP_Post;
+
+/**
+ * Load plugin textdomain for translations.
+ */
+\add_action( 'plugins_loaded', __NAMESPACE__ . '\\load_textdomain' );
+
+/**
+ * Load the plugin textdomain.
+ *
+ * @return void
+ */
+function load_textdomain(): void {
+    \load_plugin_textdomain(
+        'wp-delete-post-images',
+        false,
+        dirname( plugin_basename( __FILE__ ) ) . '/languages'
+    );
+}
 
 /**
  * Main hook: fire when a post is permanently deleted (not just trashed).
