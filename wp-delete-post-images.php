@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delete Attached Media on Post Deletion
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: GitHub Copilot
  * Text Domain: wp-delete-post-images
  * Requires at least: 5.6
@@ -110,8 +110,14 @@ function on_deleted_post( int $post_id ): void {
             continue;
         }
 
+        // Allow integrations to react before deletion.
+        \do_action( 'wpdpi_before_delete_attachment', $attachment_id, $post_id );
+
         // Force delete the attachment and its files.
         \wp_delete_attachment( $attachment_id, true );
+
+        // Allow integrations to react after deletion.
+        \do_action( 'wpdpi_after_delete_attachment', $attachment_id, $post_id );
     }
 }
 
@@ -136,6 +142,8 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
     // Sanity: if the file does not exist anymore, treat as unused.
     $file_path = \get_attached_file( $attachment_id );
     $file_base = $file_path ? wp_basename( $file_path ) : '';
+    $url       = (string) \wp_get_attachment_url( $attachment_id );
+    $url_path  = $url ? (string) wp_parse_url( $url, PHP_URL_PATH ) : '';
 
     // 0) Site-wide special uses: site icon and custom logo.
     $site_icon_id = (int) \get_option( 'site_icon' );
@@ -203,6 +211,35 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
         }
     }
 
+    // 2c) URLs stored in postmeta (e.g., custom fields, builders) as full or path-only URLs.
+    if ( $url ) {
+        $like_url = '%' . $wpdb->esc_like( $url ) . '%';
+        $meta_url_in_use = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON pm.post_id = p.ID\n                 WHERE p.ID <> %d AND p.post_status <> 'trash'\n                   AND pm.meta_value LIKE %s\n                 LIMIT 1",
+                $original_post_id,
+                $like_url
+            )
+        );
+        if ( $meta_url_in_use ) {
+            return true;
+        }
+    }
+
+    if ( $url_path ) {
+        $like_path = '%' . $wpdb->esc_like( $url_path ) . '%';
+        $meta_path_in_use = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON pm.post_id = p.ID\n                 WHERE p.ID <> %d AND p.post_status <> 'trash'\n                   AND pm.meta_value LIKE %s\n                 LIMIT 1",
+                $original_post_id,
+                $like_path
+            )
+        );
+        if ( $meta_path_in_use ) {
+            return true;
+        }
+    }
+
     // 3) Present in other postmeta values (as integer or inside serialized/JSON). Heuristic numeric boundary matching.
     $boundary_regex = '(^|[^0-9])' . (int) $attachment_id . '([^0-9]|$)';
     // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- boundary regex composed from integer with delimiters.
@@ -230,6 +267,91 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
         );
         if ( $termmeta_in_use ) {
             return true;
+        }
+    }
+
+    // 4b) Optional: scan termmeta, options, and comments for URL strings (off by default for performance).
+    $scan_termmeta_urls = (bool) \apply_filters( 'wpdpi_scan_termmeta_for_urls', false, $attachment_id, $original_post_id );
+    if ( $scan_termmeta_urls && ! empty( $wpdb->termmeta ) ) {
+        if ( $url ) {
+            $like_url = '%' . $wpdb->esc_like( $url ) . '%';
+            $termmeta_url_in_use = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT 1 FROM {$wpdb->termmeta} tm\n                     WHERE tm.meta_value LIKE %s\n                     LIMIT 1",
+                    $like_url
+                )
+            );
+            if ( $termmeta_url_in_use ) {
+                return true;
+            }
+        }
+        if ( $url_path ) {
+            $like_path = '%' . $wpdb->esc_like( $url_path ) . '%';
+            $termmeta_path_in_use = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT 1 FROM {$wpdb->termmeta} tm\n                     WHERE tm.meta_value LIKE %s\n                     LIMIT 1",
+                    $like_path
+                )
+            );
+            if ( $termmeta_path_in_use ) {
+                return true;
+            }
+        }
+    }
+
+    $scan_options = (bool) \apply_filters( 'wpdpi_scan_options_for_urls', false, $attachment_id, $original_post_id );
+    if ( $scan_options ) {
+        if ( $url ) {
+            $like_url = '%' . $wpdb->esc_like( $url ) . '%';
+            $option_in_use = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT 1 FROM {$wpdb->options} o\n                     WHERE o.option_value LIKE %s\n                     LIMIT 1",
+                    $like_url
+                )
+            );
+            if ( $option_in_use ) {
+                return true;
+            }
+        }
+        if ( $url_path ) {
+            $like_path = '%' . $wpdb->esc_like( $url_path ) . '%';
+            $option_path_in_use = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT 1 FROM {$wpdb->options} o\n                     WHERE o.option_value LIKE %s\n                     LIMIT 1",
+                    $like_path
+                )
+            );
+            if ( $option_path_in_use ) {
+                return true;
+            }
+        }
+    }
+
+    $scan_comments = (bool) \apply_filters( 'wpdpi_scan_comments_for_urls', false, $attachment_id, $original_post_id );
+    if ( $scan_comments ) {
+        if ( $url ) {
+            $like_url = '%' . $wpdb->esc_like( $url ) . '%';
+            $comment_in_use = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT 1 FROM {$wpdb->comments} c\n                     WHERE c.comment_content LIKE %s\n                     LIMIT 1",
+                    $like_url
+                )
+            );
+            if ( $comment_in_use ) {
+                return true;
+            }
+        }
+        if ( $url_path ) {
+            $like_path = '%' . $wpdb->esc_like( $url_path ) . '%';
+            $comment_path_in_use = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT 1 FROM {$wpdb->comments} c\n                     WHERE c.comment_content LIKE %s\n                     LIMIT 1",
+                    $like_path
+                )
+            );
+            if ( $comment_path_in_use ) {
+                return true;
+            }
         }
     }
 

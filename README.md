@@ -6,6 +6,8 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 
 - Deletes attached media when a post is permanently deleted
 - Skips media still used elsewhere (featured images, content references, postmeta, site icon, custom logo)
+- Skips media still used elsewhere (featured images, content references, postmeta IDs and URL strings, site icon, custom logo)
+- Optional deep scans for URLs in term meta, options, and comments (behind filters)
 - Includes the post's featured image even if it has no parent
 - Runs only on permanent deletion (not when moving to trash)
 - Lightweight, no UI, safe-by-default heuristics
@@ -24,7 +26,7 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 - For each attachment, checks if it's used elsewhere:
   - Featured image for another post
   - Referenced in other posts' `post_content`/`post_excerpt` (Gutenberg JSON id, classic classes, gallery shortcode ids, or filename)
-  - Appears in other `postmeta` values (including serialized/JSON best-effort)
+  - Appears in other `postmeta` values (including serialized/JSON best-effort) and URL strings (full URL and path-only)
   - Used as `site icon` or `custom logo`
 - Deletes only attachments that are not used elsewhere
 
@@ -49,12 +51,36 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
   ```
 
 - `wpdpi_attachment_used_elsewhere`: Extend usage detection logic.
+
   ```php
   add_filter('wpdpi_attachment_used_elsewhere', function ($used, $attachment_id, $original_post_id) {
       // Add org-specific checks here
       return $used;
   }, 10, 3);
   ```
+
+- `wpdpi_scan_termmeta_for_urls` (default: false): When true, also scan `termmeta.meta_value` for URL strings.
+
+  ```php
+  add_filter('wpdpi_scan_termmeta_for_urls', '__return_true');
+  ```
+
+- `wpdpi_scan_options_for_urls` (default: false): When true, scan `options.option_value` for URL strings.
+
+  ```php
+  add_filter('wpdpi_scan_options_for_urls', '__return_true');
+  ```
+
+- `wpdpi_scan_comments_for_urls` (default: false): When true, scan `comments.comment_content` for URL strings.
+
+  ```php
+  add_filter('wpdpi_scan_comments_for_urls', '__return_true');
+  ```
+
+## Actions
+
+- `wpdpi_before_delete_attachment( int $attachment_id, int $original_post_id )`: Fires right before an attachment is force-deleted by the plugin.
+- `wpdpi_after_delete_attachment( int $attachment_id, int $original_post_id )`: Fires immediately after an attachment is deleted.
 
 ## Notes
 
@@ -67,4 +93,5 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 
 ## Changelog
 
+- 1.1.0 — Detect attachment URL strings in postmeta by default; optional URL scans for term meta, options, and comments via filters; added before/after deletion actions.
 - 1.0.0 — Initial release.
