@@ -172,12 +172,6 @@ function apply_protected_attachment_ids( bool $skip, int $attachment_id, int $or
 
 /**
  * Register the settings page under Settings menu.
- */
-\add_action( 'admin_menu', __NAMESPACE__ . '\\register_settings_page' );
-\add_action( 'admin_init', __NAMESPACE__ . '\\register_settings' );
-
-/**
- * Register the settings page under Settings menu.
  *
  * @return void
  */
@@ -764,11 +758,13 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
     // 0) Site-wide special uses: site icon and custom logo.
     $site_icon_id = (int) \get_option( 'site_icon' );
     if ( $site_icon_id && $site_icon_id === $attachment_id ) {
+        $memo[ $memo_key ] = true;
         return true;
     }
 
     $custom_logo_id = (int) \get_theme_mod( 'custom_logo' );
     if ( $custom_logo_id && $custom_logo_id === $attachment_id ) {
+        $memo[ $memo_key ] = true;
         return true;
     }
 
@@ -781,6 +777,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
         )
     );
     if ( $thumbnail_in_use ) {
+        $memo[ $memo_key ] = true;
         return true;
     }
 
@@ -861,8 +858,9 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
     }
 
     // 3) Present in other postmeta values (as integer or inside serialized/JSON). Heuristic numeric boundary matching.
+    $boundary_regex = '(^|[^0-9])' . (int) $attachment_id . '([^0-9]|$)';
+    
     if ( $enable_postmeta_id_scan ) {
-        $boundary_regex = '(^|[^0-9])' . (int) $attachment_id . '([^0-9]|$)';
         // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- boundary regex composed from integer with delimiters.
         $meta_in_use = (int) $wpdb->get_var(
             $wpdb->prepare(
