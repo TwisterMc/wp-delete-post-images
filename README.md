@@ -1,6 +1,6 @@
 # Delete Attached Media on Post Deletion
 
-When a post is permanently deleted (from the Trash), this plugin also deletes any media attached to that post—provided those files are not used anywhere else on the site.
+When a post is permanently deleted (either by clicking "Delete Permanently" or emptying the Trash), this plugin also deletes any media attached to that post—provided those files are not used anywhere else on the site.
 
 ## Features
 
@@ -22,7 +22,7 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 
 ## How It Works
 
-- Hooks into `deleted_post` (fires only on permanent deletion)
+- Hooks into `before_delete_post` (fires only on permanent deletion, including emptying trash)
 - Collects attachments where `post_parent` is the deleted post, plus that post's `featured image`
 - For each attachment, checks if it's used elsewhere:
   - Featured image for another post
@@ -166,3 +166,4 @@ To contribute translations, copy the `.pot` file to a new `.po` file with your l
 — Initial release.
 — Detect attachment URL strings in postmeta by default; optional URL scans for term meta, options, and comments via filters; added before/after deletion actions.
 — Added accessible admin settings page under Settings → Delete Post Media; all scans and post types now configurable via UI; improved performance with memoization.
+— Uses `before_delete_post` hook to properly handle both direct permanent deletion and emptying trash.
