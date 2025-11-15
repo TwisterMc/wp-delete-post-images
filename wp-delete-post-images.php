@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Delete Attached Media on Post Deletion
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.1.0
- * Author: GitHub Copilot
+ * Version: 1.0.0
+ * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Requires at least: 5.6
  * Requires PHP: 7.4
@@ -28,6 +28,609 @@ use WP_Post;
  * @see https://developer.wordpress.org/reference/hooks/deleted_post/
  */
 \add_action( 'deleted_post', __NAMESPACE__ . '\\on_deleted_post', 10, 1 );
+
+/**
+ * Register admin settings page.
+ */
+\add_action( 'admin_menu', __NAMESPACE__ . '\\register_settings_page' );
+\add_action( 'admin_init', __NAMESPACE__ . '\\register_settings' );
+
+/**
+ * Wire up saved settings to filters.
+ */
+\add_filter( 'wpdpi_supported_post_types', __NAMESPACE__ . '\\apply_supported_post_types_setting' );
+\add_filter( 'wpdpi_enable_content_regex', __NAMESPACE__ . '\\apply_enable_content_regex_setting', 10, 3 );
+\add_filter( 'wpdpi_enable_filename_like', __NAMESPACE__ . '\\apply_enable_filename_like_setting', 10, 3 );
+\add_filter( 'wpdpi_enable_postmeta_id_scan', __NAMESPACE__ . '\\apply_enable_postmeta_id_scan_setting', 10, 3 );
+\add_filter( 'wpdpi_enable_postmeta_url_scan', __NAMESPACE__ . '\\apply_enable_postmeta_url_scan_setting', 10, 3 );
+\add_filter( 'wpdpi_scan_termmeta_for_urls', __NAMESPACE__ . '\\apply_scan_termmeta_for_urls_setting', 10, 3 );
+\add_filter( 'wpdpi_scan_options_for_urls', __NAMESPACE__ . '\\apply_scan_options_for_urls_setting', 10, 3 );
+\add_filter( 'wpdpi_scan_comments_for_urls', __NAMESPACE__ . '\\apply_scan_comments_for_urls_setting', 10, 3 );
+
+/**
+ * Apply supported post types setting.
+ *
+ * @param array<string> $types Current post types.
+ * @return array<string>
+ */
+function apply_supported_post_types_setting( array $types ): array {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['supported_post_types'] ) ? $options['supported_post_types'] : $types;
+}
+
+/**
+ * Apply enable_content_regex setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_enable_content_regex_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['enable_content_regex'] );
+}
+
+/**
+ * Apply enable_filename_like setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_enable_filename_like_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['enable_filename_like'] );
+}
+
+/**
+ * Apply enable_postmeta_id_scan setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_enable_postmeta_id_scan_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['enable_postmeta_id_scan'] );
+}
+
+/**
+ * Apply enable_postmeta_url_scan setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_enable_postmeta_url_scan_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['enable_postmeta_url_scan'] );
+}
+
+/**
+ * Apply scan_termmeta_for_urls setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_scan_termmeta_for_urls_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['scan_termmeta_for_urls'] );
+}
+
+/**
+ * Apply scan_options_for_urls setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_scan_options_for_urls_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['scan_options_for_urls'] );
+}
+
+/**
+ * Apply scan_comments_for_urls setting.
+ *
+ * @param bool $enabled Current value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_scan_comments_for_urls_setting( bool $enabled, int $attachment_id, int $original_post_id ): bool {
+    $options = \get_option( 'wpdpi_options', get_default_settings() );
+    return ! empty( $options['scan_comments_for_urls'] );
+}
+
+/**
+ * Apply protected attachment IDs check to skip_delete filter.
+ *
+ * @param bool $skip Current skip value.
+ * @param int  $attachment_id Attachment ID.
+ * @param int  $original_post_id Original post ID.
+ * @return bool
+ */
+function apply_protected_attachment_ids( bool $skip, int $attachment_id, int $original_post_id ): bool {
+    if ( $skip ) {
+        return true;
+    }
+
+    $options   = \get_option( 'wpdpi_options', get_default_settings() );
+    $protected = $options['protected_attachment_ids'] ?? [];
+
+    return in_array( $attachment_id, $protected, true );
+}
+
+\add_filter( 'wpdpi_skip_delete', __NAMESPACE__ . '\\apply_protected_attachment_ids', 10, 3 );
+
+/**
+ * Register the settings page under Settings menu.
+ */
+\add_action( 'admin_menu', __NAMESPACE__ . '\\register_settings_page' );
+\add_action( 'admin_init', __NAMESPACE__ . '\\register_settings' );
+
+/**
+ * Register the settings page under Settings menu.
+ *
+ * @return void
+ */
+function register_settings_page(): void {
+    \add_options_page(
+        \__( 'Delete Post Media Settings', 'wp-delete-post-images' ),
+        \__( 'Delete Post Media', 'wp-delete-post-images' ),
+        'manage_options',
+        'wpdpi-settings',
+        __NAMESPACE__ . '\\render_settings_page'
+    );
+}
+
+/**
+ * Register all settings fields and sections.
+ *
+ * @return void
+ */
+function register_settings(): void {
+    $option_group = 'wpdpi_settings';
+    $option_name  = 'wpdpi_options';
+
+    \register_setting(
+        $option_group,
+        $option_name,
+        [
+            'type'              => 'array',
+            'sanitize_callback' => __NAMESPACE__ . '\\sanitize_settings',
+            'default'           => get_default_settings(),
+        ]
+    );
+
+    // Performance Scans Section.
+    \add_settings_section(
+        'wpdpi_performance_section',
+        \__( 'Performance Settings', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_performance_section_description',
+        'wpdpi-settings'
+    );
+
+    \add_settings_field(
+        'enable_content_regex',
+        \__( 'Scan Post Content (REGEXP)', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_enable_content_regex',
+            'option_name' => $option_name,
+            'field_key'   => 'enable_content_regex',
+            'description' => \__( 'Search for attachment IDs in post content/excerpt using REGEXP (wp-image-, attachment_, Gutenberg JSON, etc.).', 'wp-delete-post-images' ),
+        ]
+    );
+
+    \add_settings_field(
+        'enable_filename_like',
+        \__( 'Scan Post Content (Filename)', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_enable_filename_like',
+            'option_name' => $option_name,
+            'field_key'   => 'enable_filename_like',
+            'description' => \__( 'Search for filename matches in post content/excerpt (covers direct links and sized variants).', 'wp-delete-post-images' ),
+        ]
+    );
+
+    \add_settings_field(
+        'enable_postmeta_id_scan',
+        \__( 'Scan Postmeta (ID)', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_enable_postmeta_id_scan',
+            'option_name' => $option_name,
+            'field_key'   => 'enable_postmeta_id_scan',
+            'description' => \__( 'Search for numeric attachment IDs in postmeta values (including serialized data).', 'wp-delete-post-images' ),
+        ]
+    );
+
+    \add_settings_field(
+        'enable_postmeta_url_scan',
+        \__( 'Scan Postmeta (URL)', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_enable_postmeta_url_scan',
+            'option_name' => $option_name,
+            'field_key'   => 'enable_postmeta_url_scan',
+            'description' => \__( 'Search for attachment URLs in postmeta values (e.g., custom fields, page builders).', 'wp-delete-post-images' ),
+        ]
+    );
+
+    // Deep Scans Section.
+    \add_settings_section(
+        'wpdpi_deep_scans_section',
+        \__( 'Deep Scans (Optional)', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_deep_scans_section_description',
+        'wpdpi-settings'
+    );
+
+    \add_settings_field(
+        'scan_termmeta_for_urls',
+        \__( 'Scan Term Meta for URLs', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_deep_scans_section',
+        [
+            'label_for'   => 'wpdpi_scan_termmeta_for_urls',
+            'option_name' => $option_name,
+            'field_key'   => 'scan_termmeta_for_urls',
+            'description' => \__( 'Search for attachment URLs in term metadata. May impact performance on large sites.', 'wp-delete-post-images' ),
+        ]
+    );
+
+    \add_settings_field(
+        'scan_options_for_urls',
+        \__( 'Scan Options for URLs', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_deep_scans_section',
+        [
+            'label_for'   => 'wpdpi_scan_options_for_urls',
+            'option_name' => $option_name,
+            'field_key'   => 'scan_options_for_urls',
+            'description' => \__( 'Search for attachment URLs in site options. May impact performance.', 'wp-delete-post-images' ),
+        ]
+    );
+
+    \add_settings_field(
+        'scan_comments_for_urls',
+        \__( 'Scan Comments for URLs', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_deep_scans_section',
+        [
+            'label_for'   => 'wpdpi_scan_comments_for_urls',
+            'option_name' => $option_name,
+            'field_key'   => 'scan_comments_for_urls',
+            'description' => \__( 'Search for attachment URLs in comment content. May impact performance.', 'wp-delete-post-images' ),
+        ]
+    );
+
+    // Post Types Section.
+    \add_settings_section(
+        'wpdpi_post_types_section',
+        \__( 'Supported Post Types', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_post_types_section_description',
+        'wpdpi-settings'
+    );
+
+    \add_settings_field(
+        'supported_post_types',
+        \__( 'Limit to Post Types', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_post_types_field',
+        'wpdpi-settings',
+        'wpdpi_post_types_section',
+        [
+            'label_for'   => 'wpdpi_supported_post_types',
+            'option_name' => $option_name,
+            'field_key'   => 'supported_post_types',
+        ]
+    );
+
+    // Protection Section.
+    \add_settings_section(
+        'wpdpi_protection_section',
+        \__( 'Protected Attachments', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_protection_section_description',
+        'wpdpi-settings'
+    );
+
+    \add_settings_field(
+        'protected_attachment_ids',
+        \__( 'Protected Attachment IDs', 'wp-delete-post-images' ),
+        __NAMESPACE__ . '\\render_protected_ids_field',
+        'wpdpi-settings',
+        'wpdpi_protection_section',
+        [
+            'label_for'   => 'wpdpi_protected_attachment_ids',
+            'option_name' => $option_name,
+            'field_key'   => 'protected_attachment_ids',
+        ]
+    );
+}
+
+/**
+ * Get default settings.
+ *
+ * @return array<string,mixed>
+ */
+function get_default_settings(): array {
+    return [
+        'enable_content_regex'     => true,
+        'enable_filename_like'     => true,
+        'enable_postmeta_id_scan'  => true,
+        'enable_postmeta_url_scan' => true,
+        'scan_termmeta_for_urls'   => false,
+        'scan_options_for_urls'    => false,
+        'scan_comments_for_urls'   => false,
+        'supported_post_types'     => [],
+        'protected_attachment_ids' => [],
+    ];
+}
+
+/**
+ * Sanitize settings before saving.
+ *
+ * @param mixed $input Raw input from form.
+ * @return array<string,mixed>
+ */
+function sanitize_settings( $input ): array {
+    $defaults   = get_default_settings();
+    $sanitized  = [];
+
+    // Sanitize boolean fields.
+    $bool_fields = [
+        'enable_content_regex',
+        'enable_filename_like',
+        'enable_postmeta_id_scan',
+        'enable_postmeta_url_scan',
+        'scan_termmeta_for_urls',
+        'scan_options_for_urls',
+        'scan_comments_for_urls',
+    ];
+
+    foreach ( $bool_fields as $field ) {
+        $sanitized[ $field ] = ! empty( $input[ $field ] );
+    }
+
+    // Sanitize post types array.
+    $sanitized['supported_post_types'] = [];
+    if ( ! empty( $input['supported_post_types'] ) && is_array( $input['supported_post_types'] ) ) {
+        $sanitized['supported_post_types'] = array_map( 'sanitize_key', $input['supported_post_types'] );
+    }
+
+    // Sanitize protected attachment IDs.
+    $sanitized['protected_attachment_ids'] = [];
+    if ( ! empty( $input['protected_attachment_ids'] ) ) {
+        if ( is_string( $input['protected_attachment_ids'] ) ) {
+            // Parse comma-separated list.
+            $ids = array_map( 'trim', explode( ',', $input['protected_attachment_ids'] ) );
+            $ids = array_filter( $ids, 'is_numeric' );
+            $sanitized['protected_attachment_ids'] = array_map( 'intval', $ids );
+        } elseif ( is_array( $input['protected_attachment_ids'] ) ) {
+            $sanitized['protected_attachment_ids'] = array_map( 'intval', $input['protected_attachment_ids'] );
+        }
+    }
+
+    return $sanitized;
+}
+
+/**
+ * Render performance section description.
+ *
+ * @return void
+ */
+function render_performance_section_description(): void {
+    echo '<p>' . \esc_html__( 'Control which scans run when checking if an attachment is used elsewhere. Disable heavy scans to improve performance during bulk deletions.', 'wp-delete-post-images' ) . '</p>';
+}
+
+/**
+ * Render deep scans section description.
+ *
+ * @return void
+ */
+function render_deep_scans_section_description(): void {
+    echo '<p>' . \esc_html__( 'These scans search additional database tables. Only enable if you store attachment URLs in these locations. May impact performance on large sites.', 'wp-delete-post-images' ) . '</p>';
+}
+
+/**
+ * Render post types section description.
+ *
+ * @return void
+ */
+function render_post_types_section_description(): void {
+    echo '<p>' . \esc_html__( 'By default, the plugin processes all post types except revisions, nav menu items, and attachments. Select specific post types to limit which posts trigger media cleanup.', 'wp-delete-post-images' ) . '</p>';
+}
+
+/**
+ * Render protection section description.
+ *
+ * @return void
+ */
+function render_protection_section_description(): void {
+    echo '<p>' . \esc_html__( 'Specify attachment IDs that should never be deleted, regardless of usage detection.', 'wp-delete-post-images' ) . '</p>';
+}
+
+/**
+ * Render a checkbox field.
+ *
+ * @param array<string,mixed> $args Field arguments.
+ * @return void
+ */
+function render_checkbox_field( array $args ): void {
+    $option_name = $args['option_name'];
+    $field_key   = $args['field_key'];
+    $options     = \get_option( $option_name, get_default_settings() );
+    $checked     = ! empty( $options[ $field_key ] );
+    $id          = $args['label_for'];
+    $description = $args['description'] ?? '';
+
+    printf(
+        '<label for="%s"><input type="checkbox" id="%s" name="%s[%s]" value="1" %s /> %s</label>',
+        \esc_attr( $id ),
+        \esc_attr( $id ),
+        \esc_attr( $option_name ),
+        \esc_attr( $field_key ),
+        \checked( $checked, true, false ),
+        \esc_html__( 'Enable', 'wp-delete-post-images' )
+    );
+
+    if ( $description ) {
+        printf(
+            '<p class="description">%s</p>',
+            \esc_html( $description )
+        );
+    }
+}
+
+/**
+ * Render post types multiselect field.
+ *
+ * @param array<string,mixed> $args Field arguments.
+ * @return void
+ */
+function render_post_types_field( array $args ): void {
+    $option_name = $args['option_name'];
+    $field_key   = $args['field_key'];
+    $options     = \get_option( $option_name, get_default_settings() );
+    $selected    = $options[ $field_key ] ?? [];
+
+    $post_types = \get_post_types( [ 'public' => true ], 'objects' );
+
+    echo '<fieldset>';
+    echo '<legend class="screen-reader-text">' . \esc_html__( 'Select post types to process', 'wp-delete-post-images' ) . '</legend>';
+
+    if ( empty( $post_types ) ) {
+        echo '<p>' . \esc_html__( 'No public post types found.', 'wp-delete-post-images' ) . '</p>';
+    } else {
+        foreach ( $post_types as $post_type ) {
+            $id      = 'wpdpi_post_type_' . $post_type->name;
+            $checked = in_array( $post_type->name, $selected, true );
+
+            printf(
+                '<label for="%s" style="display: block; margin-bottom: 0.5em;"><input type="checkbox" id="%s" name="%s[%s][]" value="%s" %s /> %s</label>',
+                \esc_attr( $id ),
+                \esc_attr( $id ),
+                \esc_attr( $option_name ),
+                \esc_attr( $field_key ),
+                \esc_attr( $post_type->name ),
+                \checked( $checked, true, false ),
+                \esc_html( $post_type->label )
+            );
+        }
+    }
+
+    echo '<p class="description">' . \esc_html__( 'Leave empty to process all post types (except revisions, nav menu items, and attachments).', 'wp-delete-post-images' ) . '</p>';
+    echo '</fieldset>';
+}
+
+/**
+ * Render protected attachment IDs field.
+ *
+ * @param array<string,mixed> $args Field arguments.
+ * @return void
+ */
+function render_protected_ids_field( array $args ): void {
+    $option_name = $args['option_name'];
+    $field_key   = $args['field_key'];
+    $options     = \get_option( $option_name, get_default_settings() );
+    $protected   = $options[ $field_key ] ?? [];
+    $value       = ! empty( $protected ) ? implode( ', ', $protected ) : '';
+    $id          = $args['label_for'];
+
+    printf(
+        '<label for="%s" class="screen-reader-text">%s</label>',
+        \esc_attr( $id ),
+        \esc_html__( 'Enter comma-separated attachment IDs', 'wp-delete-post-images' )
+    );
+
+    printf(
+        '<input type="text" id="%s" name="%s[%s]" value="%s" class="regular-text" placeholder="%s" aria-describedby="%s_description" />',
+        \esc_attr( $id ),
+        \esc_attr( $option_name ),
+        \esc_attr( $field_key ),
+        \esc_attr( $value ),
+        \esc_attr__( 'e.g., 123, 456, 789', 'wp-delete-post-images' ),
+        \esc_attr( $id )
+    );
+
+    printf(
+        '<p class="description" id="%s_description">%s</p>',
+        \esc_attr( $id ),
+        \esc_html__( 'Enter attachment IDs separated by commas. These attachments will never be deleted by this plugin.', 'wp-delete-post-images' )
+    );
+}
+
+/**
+ * Render the settings page.
+ *
+ * @return void
+ */
+function render_settings_page(): void {
+    if ( ! \current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    // Handle settings update message.
+    if ( isset( $_GET['settings-updated'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        \add_settings_error(
+            'wpdpi_messages',
+            'wpdpi_message',
+            \__( 'Settings saved.', 'wp-delete-post-images' ),
+            'success'
+        );
+    }
+
+    \settings_errors( 'wpdpi_messages' );
+
+    ?>
+    <div class="wrap">
+        <h1><?php echo \esc_html( \get_admin_page_title() ); ?></h1>
+
+        <form method="post" action="options.php">
+            <?php
+            \settings_fields( 'wpdpi_settings' );
+            \do_settings_sections( 'wpdpi-settings' );
+            \submit_button( \__( 'Save Settings', 'wp-delete-post-images' ) );
+            ?>
+        </form>
+
+        <hr />
+
+        <h2><?php \esc_html_e( 'How It Works', 'wp-delete-post-images' ); ?></h2>
+        <p><?php \esc_html_e( 'When a post is permanently deleted, this plugin automatically deletes attached media files—but only if they are not used anywhere else on your site.', 'wp-delete-post-images' ); ?></p>
+
+        <h3><?php \esc_html_e( 'Checks Performed', 'wp-delete-post-images' ); ?></h3>
+        <ul style="list-style: disc; margin-left: 2em;">
+            <li><?php \esc_html_e( 'Featured image of another post', 'wp-delete-post-images' ); ?></li>
+            <li><?php \esc_html_e( 'Site icon or custom logo', 'wp-delete-post-images' ); ?></li>
+            <li><?php \esc_html_e( 'Referenced in post content/excerpt (IDs, classes, filenames)', 'wp-delete-post-images' ); ?></li>
+            <li><?php \esc_html_e( 'Stored in postmeta (IDs or URLs)', 'wp-delete-post-images' ); ?></li>
+            <li><?php \esc_html_e( 'Optionally: term meta, options, and comments (if enabled above)', 'wp-delete-post-images' ); ?></li>
+        </ul>
+
+        <p><?php \esc_html_e( 'The plugin performs conservative checks to avoid accidental data loss. If any check suggests the file may be in use, it will not be deleted.', 'wp-delete-post-images' ); ?></p>
+    </div>
+    <?php
+}
 
 /**
  * Handle post permanent deletion by removing attached media that are not used elsewhere.

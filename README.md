@@ -5,19 +5,20 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 ## Features
 
 - Deletes attached media when a post is permanently deleted
-- Skips media still used elsewhere (featured images, content references, postmeta, site icon, custom logo)
 - Skips media still used elsewhere (featured images, content references, postmeta IDs and URL strings, site icon, custom logo)
-- Optional deep scans for URLs in term meta, options, and comments (behind filters)
+- Optional deep scans for URLs in term meta, options, and comments
 - Includes the post's featured image even if it has no parent
 - Runs only on permanent deletion (not when moving to trash)
-- Lightweight, no UI, safe-by-default heuristics
-- Filters to customize behavior
+- Accessible admin settings page under **Settings → Delete Post Media**
+- Performance tuning: enable/disable individual scans for bulk operations
+- Safe-by-default heuristics with extensible filters and actions
 
 ## Installation
 
 1. Copy the folder `wp-delete-post-images` into `wp-content/plugins/`.
 2. Ensure the main file is at `wp-content/plugins/wp-delete-post-images/wp-delete-post-images.php`.
 3. Activate the plugin in WP Admin → Plugins.
+4. (Optional) Configure settings at **Settings → Delete Post Media**.
 
 ## How It Works
 
@@ -30,7 +31,38 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
   - Used as `site icon` or `custom logo`
 - Deletes only attachments that are not used elsewhere
 
+## Settings
+
+Go to **Settings → Delete Post Media** in your WordPress admin to configure:
+
+### Performance Settings
+
+- **Scan Post Content (REGEXP)**: Search for attachment IDs in post content/excerpt using pattern matching.
+- **Scan Post Content (Filename)**: Search for filename matches in post content/excerpt.
+- **Scan Postmeta (ID)**: Search for numeric attachment IDs in postmeta values.
+- **Scan Postmeta (URL)**: Search for attachment URLs in postmeta values.
+
+Disable heavy scans to improve performance during bulk post deletions.
+
+### Deep Scans (Optional)
+
+- **Scan Term Meta for URLs**: Search for attachment URLs in term metadata.
+- **Scan Options for URLs**: Search for attachment URLs in site options.
+- **Scan Comments for URLs**: Search for attachment URLs in comment content.
+
+Only enable these if you store attachment URLs in these locations. May impact performance on large sites.
+
+### Supported Post Types
+
+By default, all post types (except revisions, nav menu items, and attachments) trigger cleanup. Select specific post types to limit which posts are processed.
+
+### Protected Attachments
+
+Enter attachment IDs (comma-separated) that should never be deleted, regardless of usage detection. Useful for critical images like logos or headers.
+
 ## Filters
+
+All settings can also be controlled programmatically via filters:
 
 - `wpdpi_supported_post_types`: Limit which post types trigger cleanup.
 
@@ -44,11 +76,13 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 
   ```php
   add_filter('wpdpi_skip_delete', function ($skip, $attachment_id, $original_post_id) {
-      // Example: keep specific IDs
+      // Example: keep specific IDs (can also use settings UI)
       $protected = [123, 456];
       return $skip || in_array($attachment_id, $protected, true);
   }, 10, 3);
   ```
+
+  **Note**: Protected attachment IDs can now be configured via the settings page.
 
 - `wpdpi_attachment_used_elsewhere`: Extend usage detection logic.
 
@@ -108,8 +142,9 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 
 ## Notes
 
-- This plugin does not add or store any options/data.
-- It intentionally performs conservative checks to avoid accidental data loss. If a heuristic suggests the file may be in use, it will not delete it.
+- Settings are stored in the `wpdpi_options` option. All filters remain available for programmatic control.
+- The plugin intentionally performs conservative checks to avoid accidental data loss. If a heuristic suggests the file may be in use, it will not delete it.
+- For bulk operations (deleting many posts at once), consider disabling heavy scans temporarily via the settings page.
 
 ## Compatibility
 
@@ -117,5 +152,8 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
 
 ## Changelog
 
-- 1.1.0 — Detect attachment URL strings in postmeta by default; optional URL scans for term meta, options, and comments via filters; added before/after deletion actions.
-- 1.0.0 — Initial release.
+### 1.0.0
+
+— Initial release.
+— Detect attachment URL strings in postmeta by default; optional URL scans for term meta, options, and comments via filters; added before/after deletion actions.
+— Added accessible admin settings page under Settings → Delete Post Media; all scans and post types now configurable via UI; improved performance with memoization.
