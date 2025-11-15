@@ -618,6 +618,10 @@ function wpdpi_render_settings_page(): void {
     <div class="wrap">
         <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
 
+        <div class="notice notice-warning">
+            <p><strong><?php esc_html_e( 'Warning:', 'wp-delete-post-images' ); ?></strong> <?php esc_html_e( 'This plugin permanently deletes media files when posts are deleted. This action cannot be undone. Always backup your site before bulk deletions.', 'wp-delete-post-images' ); ?></p>
+        </div>
+
         <form method="post" action="options.php">
             <?php
             settings_fields( 'wpdpi_settings' );

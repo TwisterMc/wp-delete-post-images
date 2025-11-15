@@ -114,6 +114,12 @@ msgstr ""
 msgid "Enable"
 msgstr ""
 
+msgid "Warning:"
+msgstr ""
+
+msgid "This plugin permanently deletes media files when posts are deleted. This action cannot be undone. Always backup your site before bulk deletions."
+msgstr ""
+
 msgid "Settings saved."
 msgstr ""
 

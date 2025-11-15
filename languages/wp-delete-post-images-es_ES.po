@@ -114,7 +114,13 @@ msgid "Enter attachment IDs separated by commas. These attachments will never be
 msgstr "Ingresa IDs de adjuntos separados por comas. Estos adjuntos nunca serán eliminados por este plugin."
 
 msgid "Enable"
-msgstr "Activar"
+msgstr "Habilitar"
+
+msgid "Warning:"
+msgstr "Advertencia:"
+
+msgid "This plugin permanently deletes media files when posts are deleted. This action cannot be undone. Always backup your site before bulk deletions."
+msgstr "Este plugin elimina permanentemente archivos multimedia cuando se eliminan publicaciones. Esta acción no se puede deshacer. Siempre haga una copia de seguridad de su sitio antes de eliminaciones masivas."
 
 msgid "Settings saved."
 msgstr "Configuración guardada."

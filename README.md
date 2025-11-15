@@ -13,6 +13,16 @@ When a post is permanently deleted (either by clicking "Delete Permanently" or e
 - Performance tuning: enable/disable individual scans for bulk operations
 - Safe-by-default heuristics with extensible filters and actions
 
+## ⚠️ Important Warning
+
+**This plugin permanently deletes media files and this action cannot be undone.** While the plugin performs conservative checks to avoid deleting files that are still in use, you should always:
+
+- **Backup your site** before using this plugin, especially before bulk deletions
+- Test the plugin on a staging environment first
+- Review the settings to ensure they match your needs
+
+Once media files are deleted by this plugin, they cannot be recovered unless you have a backup.
+
 ## Installation
 
 1. Copy the folder `wp-delete-post-images` into `wp-content/plugins/`.
