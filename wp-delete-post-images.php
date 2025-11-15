@@ -34,15 +34,18 @@ function wpdpi_load_textdomain(): void {
 }
 
 /**
- * Main hook: fire when a post is permanently deleted (not just trashed).
+ * Main hook: fire before a post is permanently deleted.
  *
  * Notes:
- * - We listen on 'deleted_post', which only fires on permanent deletion.
+ * - We use 'before_delete_post' instead of 'deleted_post' because we need to access
+ *   the post object before it's removed from the database.
+ * - This hook fires for permanent deletion (including emptying trash) but not when
+ *   a post is initially moved to trash.
  * - We intentionally skip attachments, revisions, and menu items.
  *
- * @see https://developer.wordpress.org/reference/hooks/deleted_post/
+ * @see https://developer.wordpress.org/reference/hooks/before_delete_post/
  */
-add_action( 'deleted_post', 'wpdpi_on_deleted_post', 10, 1 );
+add_action( 'before_delete_post', 'wpdpi_on_deleted_post', 10, 2 );
 
 /**
  * Register admin settings page.
@@ -644,11 +647,15 @@ function wpdpi_render_settings_page(): void {
 /**
  * Handle post permanent deletion by removing attached media that are not used elsewhere.
  *
- * @param int $post_id The deleted post ID.
+ * @param int      $post_id The deleted post ID.
+ * @param \WP_Post $post    The post object being deleted.
  * @return void
  */
-function wpdpi_on_deleted_post( int $post_id ): void {
-    $post = get_post( $post_id );
+function wpdpi_on_deleted_post( int $post_id, $post = null ): void {
+    // Get post object if not provided (backwards compatibility)
+    if ( ! $post instanceof \WP_Post ) {
+        $post = get_post( $post_id );
+    }
 
     if ( ! $post instanceof \WP_Post ) {
         return;
