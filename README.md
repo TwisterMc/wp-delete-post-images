@@ -59,6 +59,30 @@ When a post is permanently deleted (from the Trash), this plugin also deletes an
   }, 10, 3);
   ```
 
+- `wpdpi_enable_content_regex` (default: true): Toggle REGEXP scanning of post content/excerpt for attachment IDs.
+
+  ```php
+  add_filter('wpdpi_enable_content_regex', '__return_false');
+  ```
+
+- `wpdpi_enable_filename_like` (default: true): Toggle LIKE scanning of post content/excerpt for filename matches.
+
+  ```php
+  add_filter('wpdpi_enable_filename_like', '__return_false');
+  ```
+
+- `wpdpi_enable_postmeta_id_scan` (default: true): Toggle numeric ID scans in postmeta values.
+
+  ```php
+  add_filter('wpdpi_enable_postmeta_id_scan', '__return_false');
+  ```
+
+- `wpdpi_enable_postmeta_url_scan` (default: true): Toggle URL/path scans in postmeta values.
+
+  ```php
+  add_filter('wpdpi_enable_postmeta_url_scan', '__return_false');
+  ```
+
 - `wpdpi_scan_termmeta_for_urls` (default: false): When true, also scan `termmeta.meta_value` for URL strings.
 
   ```php

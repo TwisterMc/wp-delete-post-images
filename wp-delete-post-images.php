@@ -139,11 +139,24 @@ function on_deleted_post( int $post_id ): void {
 function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id ): bool {
     global $wpdb;
 
+    // Simple memoization across a single request to avoid duplicate scans.
+    static $memo = [];
+    $memo_key = $attachment_id . '|' . $original_post_id;
+    if ( array_key_exists( $memo_key, $memo ) ) {
+        return (bool) $memo[ $memo_key ];
+    }
+
     // Sanity: if the file does not exist anymore, treat as unused.
     $file_path = \get_attached_file( $attachment_id );
     $file_base = $file_path ? wp_basename( $file_path ) : '';
     $url       = (string) \wp_get_attachment_url( $attachment_id );
     $url_path  = $url ? (string) wp_parse_url( $url, PHP_URL_PATH ) : '';
+
+    // Allow sites to tune heavier scans for performance.
+    $enable_content_regex     = (bool) \apply_filters( 'wpdpi_enable_content_regex', true, $attachment_id, $original_post_id );
+    $enable_filename_like     = (bool) \apply_filters( 'wpdpi_enable_filename_like', true, $attachment_id, $original_post_id );
+    $enable_postmeta_id_scan  = (bool) \apply_filters( 'wpdpi_enable_postmeta_id_scan', true, $attachment_id, $original_post_id );
+    $enable_postmeta_url_scan = (bool) \apply_filters( 'wpdpi_enable_postmeta_url_scan', true, $attachment_id, $original_post_id );
 
     // 0) Site-wide special uses: site icon and custom logo.
     $site_icon_id = (int) \get_option( 'site_icon' );
@@ -179,7 +192,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
     $id_regex_parts[] = 'ids=\"[^\"]*\\b' . $id . '\\b';
 
     $content_in_use = 0;
-    if ( ! empty( $id_regex_parts ) ) {
+    if ( $enable_content_regex && ! empty( $id_regex_parts ) ) {
         $regex = '(' . implode( '|', array_map( 'preg_quote_for_mysql_regex', $id_regex_parts ) ) . ')';
         // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $regex is safely built using preg_quote_for_mysql_regex.
         $content_in_use = (int) $wpdb->get_var(
@@ -191,12 +204,13 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
             )
         );
         if ( $content_in_use ) {
+            $memo[ $memo_key ] = true;
             return true;
         }
     }
 
     // 2b) Referenced by filename (covers direct links and sized variants). Conservative and may false-positive on same-name files.
-    if ( $file_base ) {
+    if ( $file_base && $enable_filename_like ) {
         $like = '%' . $wpdb->esc_like( $file_base ) . '%';
         $filename_in_use = (int) $wpdb->get_var(
             $wpdb->prepare(
@@ -207,12 +221,13 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
             )
         );
         if ( $filename_in_use ) {
+            $memo[ $memo_key ] = true;
             return true;
         }
     }
 
     // 2c) URLs stored in postmeta (e.g., custom fields, builders) as full or path-only URLs.
-    if ( $url ) {
+    if ( $enable_postmeta_url_scan && $url ) {
         $like_url = '%' . $wpdb->esc_like( $url ) . '%';
         $meta_url_in_use = (int) $wpdb->get_var(
             $wpdb->prepare(
@@ -222,11 +237,12 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
             )
         );
         if ( $meta_url_in_use ) {
+            $memo[ $memo_key ] = true;
             return true;
         }
     }
 
-    if ( $url_path ) {
+    if ( $enable_postmeta_url_scan && $url_path ) {
         $like_path = '%' . $wpdb->esc_like( $url_path ) . '%';
         $meta_path_in_use = (int) $wpdb->get_var(
             $wpdb->prepare(
@@ -236,23 +252,27 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
             )
         );
         if ( $meta_path_in_use ) {
+            $memo[ $memo_key ] = true;
             return true;
         }
     }
 
     // 3) Present in other postmeta values (as integer or inside serialized/JSON). Heuristic numeric boundary matching.
-    $boundary_regex = '(^|[^0-9])' . (int) $attachment_id . '([^0-9]|$)';
-    // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- boundary regex composed from integer with delimiters.
-    $meta_in_use = (int) $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT 1 FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON pm.post_id = p.ID\n             WHERE p.ID <> %d AND p.post_status <> 'trash'\n               AND (pm.meta_value = %s OR pm.meta_value REGEXP %s)\n             LIMIT 1",
-            $original_post_id,
-            (string) $attachment_id,
-            $boundary_regex
-        )
-    );
-    if ( $meta_in_use ) {
-        return true;
+    if ( $enable_postmeta_id_scan ) {
+        $boundary_regex = '(^|[^0-9])' . (int) $attachment_id . '([^0-9]|$)';
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- boundary regex composed from integer with delimiters.
+        $meta_in_use = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON pm.post_id = p.ID\n             WHERE p.ID <> %d AND p.post_status <> 'trash'\n               AND (pm.meta_value = %s OR pm.meta_value REGEXP %s)\n             LIMIT 1",
+                $original_post_id,
+                (string) $attachment_id,
+                $boundary_regex
+            )
+        );
+        if ( $meta_in_use ) {
+            $memo[ $memo_key ] = true;
+            return true;
+        }
     }
 
     // 4) Optional: term meta scan for the ID (best-effort, may not exist on very old installs).
@@ -266,6 +286,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
             )
         );
         if ( $termmeta_in_use ) {
+            $memo[ $memo_key ] = true;
             return true;
         }
     }
@@ -282,6 +303,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
                 )
             );
             if ( $termmeta_url_in_use ) {
+                $memo[ $memo_key ] = true;
                 return true;
             }
         }
@@ -294,6 +316,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
                 )
             );
             if ( $termmeta_path_in_use ) {
+                $memo[ $memo_key ] = true;
                 return true;
             }
         }
@@ -310,6 +333,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
                 )
             );
             if ( $option_in_use ) {
+                $memo[ $memo_key ] = true;
                 return true;
             }
         }
@@ -322,6 +346,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
                 )
             );
             if ( $option_path_in_use ) {
+                $memo[ $memo_key ] = true;
                 return true;
             }
         }
@@ -338,6 +363,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
                 )
             );
             if ( $comment_in_use ) {
+                $memo[ $memo_key ] = true;
                 return true;
             }
         }
@@ -350,6 +376,7 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
                 )
             );
             if ( $comment_path_in_use ) {
+                $memo[ $memo_key ] = true;
                 return true;
             }
         }
@@ -364,7 +391,9 @@ function attachment_is_used_elsewhere( int $attachment_id, int $original_post_id
      * @param int  $attachment_id  The attachment ID.
      * @param int  $original_post_id The deleted post ID.
      */
-    return (bool) \apply_filters( 'wpdpi_attachment_used_elsewhere', false, $attachment_id, $original_post_id );
+    $used = (bool) \apply_filters( 'wpdpi_attachment_used_elsewhere', false, $attachment_id, $original_post_id );
+    $memo[ $memo_key ] = $used;
+    return $used;
 }
 
 /**
