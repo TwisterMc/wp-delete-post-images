@@ -12,6 +12,7 @@ When a post is permanently deleted (either by clicking "Delete Permanently" or e
 - Accessible admin settings page under **Settings → Delete Post Media**
 - Performance tuning: enable/disable individual scans for bulk operations
 - Safe-by-default heuristics with extensible filters and actions
+- Light UI feedback: progress overlay during deletion and a post-action summary notice
 
 ## ⚠️ Important Warning
 
@@ -61,6 +62,11 @@ Disable heavy scans to improve performance during bulk post deletions.
 - **Scan Comments for URLs**: Search for attachment URLs in comment content.
 
 Only enable these if you store attachment URLs in these locations. May impact performance on large sites.
+
+### User Feedback
+
+- A minimal progress overlay appears when you trigger delete actions (e.g., Delete Permanently, Empty Trash, bulk delete) so users see that cleanup is running.
+- After the redirect, a small admin notice summarizes results (e.g., how many attachments were deleted or kept because they were still in use).
 
 ### Supported Post Types
 

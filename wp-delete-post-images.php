@@ -49,6 +49,21 @@ function wpdpi_load_textdomain(): void {
 add_action( 'before_delete_post', 'wpdpi_on_deleted_post', 10, 2 );
 
 /**
+ * After a request that deletes posts finishes, record a notice for the user.
+ */
+add_action( 'shutdown', 'wpdpi_store_deletion_notice' );
+
+/**
+ * Show a small notice in the admin after deletions summarizing results.
+ */
+add_action( 'admin_notices', 'wpdpi_render_deletion_notice' );
+
+/**
+ * Enqueue a lightweight progress overlay when triggering deletions from the list table.
+ */
+add_action( 'admin_enqueue_scripts', 'wpdpi_enqueue_admin_indicator' );
+
+/**
  * Register admin settings page.
  */
 add_action( 'admin_menu', 'wpdpi_register_settings_page' );
@@ -650,6 +665,41 @@ function wpdpi_render_settings_page(): void {
 }
 
 /**
+ * Internal: increment runtime deletion stats for this request.
+ *
+ * @param string $key   Stat key ('deleted' or 'kept').
+ * @param int    $delta Amount to add.
+ * @return void
+ */
+function wpdpi_inc_stat( string $key, int $delta = 1 ): void {
+    static $stats = null;
+    if ( null === $stats ) {
+        $stats = [ 'deleted' => 0, 'kept' => 0 ];
+    }
+    if ( ! isset( $stats[ $key ] ) ) {
+        $stats[ $key ] = 0;
+    }
+    $stats[ $key ] += $delta;
+
+    // Stash back into a global for retrieval from other callbacks in same request.
+    $GLOBALS['wpdpi_runtime_stats'] = $stats;
+}
+
+/**
+ * Internal: get current runtime stats for this request.
+ *
+ * @return array{deleted:int,kept:int}
+ */
+function wpdpi_get_stats(): array {
+    if ( isset( $GLOBALS['wpdpi_runtime_stats'] ) && is_array( $GLOBALS['wpdpi_runtime_stats'] ) ) {
+        // Normalize keys.
+        $stats = wp_parse_args( $GLOBALS['wpdpi_runtime_stats'], [ 'deleted' => 0, 'kept' => 0 ] );
+        return [ 'deleted' => (int) $stats['deleted'], 'kept' => (int) $stats['kept'] ];
+    }
+    return [ 'deleted' => 0, 'kept' => 0 ];
+}
+
+/**
  * Handle post permanent deletion by removing attached media that are not used elsewhere.
  *
  * @param int      $post_id The deleted post ID.
@@ -731,6 +781,8 @@ function wpdpi_on_deleted_post( int $post_id, $post = null ): void {
         $skip = (bool) apply_filters( 'wpdpi_skip_delete', $used_elsewhere, $attachment_id, $post_id );
 
         if ( $skip ) {
+            // Kept because used elsewhere or skipped by filter.
+            wpdpi_inc_stat( 'kept', 1 );
             continue;
         }
 
@@ -740,9 +792,140 @@ function wpdpi_on_deleted_post( int $post_id, $post = null ): void {
         // Force delete the attachment and its files.
         wp_delete_attachment( $attachment_id, true );
 
+        // Count deleted attachments for this request.
+        wpdpi_inc_stat( 'deleted', 1 );
+
         // Allow integrations to react after deletion.
         do_action( 'wpdpi_after_delete_attachment', $attachment_id, $post_id );
     }
+}
+
+/**
+ * On request end, if we deleted or kept any attachments, store a transient
+ * for the current user so we can render a summary notice after redirect.
+ *
+ * @return void
+ */
+function wpdpi_store_deletion_notice(): void {
+    if ( ! is_admin() ) {
+        return;
+    }
+
+    $stats = wpdpi_get_stats();
+    if ( empty( $stats['deleted'] ) && empty( $stats['kept'] ) ) {
+        return;
+    }
+
+    $user_id = get_current_user_id();
+    if ( ! $user_id ) {
+        return;
+    }
+
+    // Keep the message briefly; it will be consumed on next admin load.
+    set_transient( 'wpdpi_notice_' . $user_id, [
+        'deleted' => (int) $stats['deleted'],
+        'kept'    => (int) $stats['kept'],
+        'time'    => time(),
+    ], MINUTE_IN_SECONDS );
+}
+
+/**
+ * Render the summary notice if present for the current user.
+ *
+ * @return void
+ */
+function wpdpi_render_deletion_notice(): void {
+    if ( ! is_admin() ) {
+        return;
+    }
+
+    // Only show on list table screens (edit.php) where it makes sense.
+    $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+    if ( $screen && 'edit' !== $screen->base ) {
+        return;
+    }
+
+    $user_id = get_current_user_id();
+    if ( ! $user_id ) {
+        return;
+    }
+
+    $data = get_transient( 'wpdpi_notice_' . $user_id );
+    if ( ! is_array( $data ) ) {
+        return;
+    }
+
+    delete_transient( 'wpdpi_notice_' . $user_id );
+
+    $deleted = (int) ( $data['deleted'] ?? 0 );
+    $kept    = (int) ( $data['kept'] ?? 0 );
+
+    if ( $deleted <= 0 && $kept <= 0 ) {
+        return;
+    }
+
+    $parts = [];
+    if ( $deleted > 0 ) {
+        /* translators: %d: number of attachments deleted */
+        $parts[] = sprintf( _n( '%d unused attachment deleted', '%d unused attachments deleted', $deleted, 'wp-delete-post-images' ), $deleted );
+    }
+    if ( $kept > 0 ) {
+        /* translators: %d: number of attachments kept */
+        $parts[] = sprintf( _n( '%d attachment kept (still in use)', '%d attachments kept (still in use)', $kept, 'wp-delete-post-images' ), $kept );
+    }
+
+    $message = implode( ' • ', $parts );
+
+    echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Delete Post Media:', 'wp-delete-post-images' ) . ' ' . esc_html( $message ) . '</p></div>';
+}
+
+/**
+ * Enqueue a minimal full-screen overlay with spinner text when user triggers
+ * deletion actions from the posts list table. This reassures that cleanup is running.
+ *
+ * @return void
+ */
+function wpdpi_enqueue_admin_indicator(): void {
+    if ( ! is_admin() ) {
+        return;
+    }
+    $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+    if ( ! $screen || 'edit' !== $screen->base ) {
+        return;
+    }
+
+    // Ensure jQuery is present, then attach inline script.
+    wp_enqueue_script( 'jquery-core' );
+    wp_localize_script( 'jquery-core', 'wpdpiIndicator', [
+        /* translators: progress message while deleting posts */
+        'message' => __( 'Cleaning up media files…', 'wp-delete-post-images' ),
+    ] );
+
+    $js = <<<'JS'
+jQuery(function($){
+    var overlay = $('<div id="wpdpi-overlay"><div class="wpdpi-box"><span class="wpdpi-spinner"></span><span class="wpdpi-text"></span></div></div>');
+    var css = '<style id="wpdpi-overlay-style">#wpdpi-overlay{position:fixed;inset:0;background:rgba(255,255,255,.7);z-index:999999;display:none;align-items:center;justify-content:center}#wpdpi-overlay .wpdpi-box{background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.1);display:flex;align-items:center;gap:10px;font-size:14px;color:#1d2327}#wpdpi-overlay .wpdpi-spinner{width:18px;height:18px;border:2px solid #2271b1;border-right-color:transparent;border-radius:50%;animation:wpdpi-spin .6s linear infinite}@keyframes wpdpi-spin{to{transform:rotate(360deg)}}</style>';
+    $('head').append(css);
+    $('body').append(overlay);
+    function showOverlay(text){
+        $('#wpdpi-overlay .wpdpi-text').text(text || (window.wpdpiIndicator ? wpdpiIndicator.message : 'Cleaning up…'));
+        $('#wpdpi-overlay').css('display','flex');
+    }
+    function maybeShowForBulk(e){
+        var val1 = $('select[name="action"]').val();
+        var val2 = $('select[name="action2"]').val();
+        if (val1==='delete' || val2==='delete' || val1==='trash' || val2==='trash') { showOverlay(); }
+    }
+    // Row actions: Trash/Delete Permanently links
+    $('a.submitdelete').on('click', function(){ showOverlay(); });
+    // Empty Trash button on trash screen
+    $('#delete_all').on('click', function(){ showOverlay(); });
+    // Bulk actions top/bottom
+    $('#doaction, #doaction2').on('click', function(e){ maybeShowForBulk(e); });
+});
+JS;
+
+    wp_add_inline_script( 'jquery-core', $js );
 }
 
 /**
