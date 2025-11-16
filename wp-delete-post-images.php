@@ -1106,17 +1106,23 @@ jQuery(function($){
         $('#wpdpi-overlay .wpdpi-text').text(text || (window.wpdpiIndicator ? wpdpiIndicator.message : 'Cleaning up…'));
         $('#wpdpi-overlay').css('display','flex');
     }
-    function maybeShowForBulk(e){
+    function maybeShowForBulk(){
         var val1 = $('select[name="action"]').val();
         var val2 = $('select[name="action2"]').val();
         if (val1==='delete' || val2==='delete' || val1==='trash' || val2==='trash') { showOverlay(); }
     }
     // Row actions: Trash/Delete Permanently links
-    $('a.submitdelete').on('click', function(){ showOverlay(); });
-    // Empty Trash button on trash screen
-    $('#delete_all').on('click', function(){ showOverlay(); });
+    $(document).on('click', 'a.submitdelete', function(){ showOverlay(); });
+    // Empty Trash: catch various markup (button/input/link) and form submits
+    $(document).on('click', '#delete_all, #empty-trash, a#delete_all, a.page-title-action[href*="delete_all"]', function(){ showOverlay(); });
+    $('#posts-filter').on('submit', function(){
+        var $active = $(document.activeElement);
+        if ($active.is('#delete_all, #empty-trash') || $active.attr('name')==='delete_all') {
+            showOverlay();
+        }
+    });
     // Bulk actions top/bottom
-    $('#doaction, #doaction2').on('click', function(e){ maybeShowForBulk(e); });
+    $(document).on('click', '#doaction, #doaction2', function(){ maybeShowForBulk(); });
 });
 JS;
 
