@@ -13,6 +13,7 @@ When a post is permanently deleted (either by clicking "Delete Permanently" or e
 - Performance tuning: enable/disable individual scans for bulk operations
 - Safe-by-default heuristics with extensible filters and actions
 - Light UI feedback: progress overlay during deletion and a post-action summary notice
+- Background processing: optional queued cleanup to prevent timeouts on bulk deletes
 
 ## ⚠️ Important Warning
 
@@ -48,6 +49,7 @@ Go to **Settings → Delete Post Media** in your WordPress admin to configure:
 
 ### Performance Settings
 
+- **Process In Background**: Run media cleanup via a background queue to avoid timeouts during bulk deletions. Recommended.
 - **Scan Post Content (REGEXP)**: Search for attachment IDs in post content/excerpt using pattern matching.
 - **Scan Post Content (Filename)**: Search for filename matches in post content/excerpt.
 - **Scan Postmeta (ID)**: Search for numeric attachment IDs in postmeta values.
@@ -67,6 +69,11 @@ Only enable these if you store attachment URLs in these locations. May impact pe
 
 - A minimal progress overlay appears when you trigger delete actions (e.g., Delete Permanently, Empty Trash, bulk delete) so users see that cleanup is running.
 - After the redirect, a small admin notice summarizes results (e.g., how many attachments were deleted or kept because they were still in use).
+
+### Background Cleanup
+
+- When enabled, the plugin queues attachments for cleanup and processes them in small batches via WP-Cron, reducing the chance of HTTP timeouts when deleting many posts at once (including Empty Trash).
+- The first page load after enqueuing shows a notice indicating how many items were queued. As batches complete, items are deleted in the background.
 
 ### Supported Post Types
 

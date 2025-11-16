@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.1
+ * Version: 1.0.0.2
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -62,6 +62,11 @@ add_action( 'admin_notices', 'wpdpi_render_deletion_notice' );
  * Enqueue a lightweight progress overlay when triggering deletions from the list table.
  */
 add_action( 'admin_enqueue_scripts', 'wpdpi_enqueue_admin_indicator' );
+
+/**
+ * Background queue processor hook.
+ */
+add_action( 'wpdpi_process_queue_event', 'wpdpi_process_queue' );
 
 /**
  * Register admin settings page.
@@ -247,6 +252,20 @@ function wpdpi_register_settings(): void {
     );
 
     add_settings_field(
+        'process_in_background',
+        __( 'Process In Background', 'wp-delete-post-images' ),
+        'wpdpi_render_checkbox_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_process_in_background',
+            'option_name' => $option_name,
+            'field_key'   => 'process_in_background',
+            'description' => __( 'Run media cleanup in the background to avoid timeouts during bulk deletions. Recommended.', 'wp-delete-post-images' ),
+        ]
+    );
+
+    add_settings_field(
         'enable_content_regex',
         __( 'Scan Post Content (REGEXP)', 'wp-delete-post-images' ),
         'wpdpi_render_checkbox_field',
@@ -402,6 +421,7 @@ function wpdpi_register_settings(): void {
  */
 function wpdpi_get_default_settings(): array {
     return [
+        'process_in_background'  => true,
         'enable_content_regex'     => true,
         'enable_filename_like'     => true,
         'enable_postmeta_id_scan'  => true,
@@ -426,6 +446,7 @@ function wpdpi_sanitize_settings( $input ): array {
 
     // Sanitize boolean fields.
     $bool_fields = [
+        'process_in_background',
         'enable_content_regex',
         'enable_filename_like',
         'enable_postmeta_id_scan',
@@ -674,7 +695,7 @@ function wpdpi_render_settings_page(): void {
 function wpdpi_inc_stat( string $key, int $delta = 1 ): void {
     static $stats = null;
     if ( null === $stats ) {
-        $stats = [ 'deleted' => 0, 'kept' => 0 ];
+        $stats = [ 'deleted' => 0, 'kept' => 0, 'queued' => 0 ];
     }
     if ( ! isset( $stats[ $key ] ) ) {
         $stats[ $key ] = 0;
@@ -693,10 +714,10 @@ function wpdpi_inc_stat( string $key, int $delta = 1 ): void {
 function wpdpi_get_stats(): array {
     if ( isset( $GLOBALS['wpdpi_runtime_stats'] ) && is_array( $GLOBALS['wpdpi_runtime_stats'] ) ) {
         // Normalize keys.
-        $stats = wp_parse_args( $GLOBALS['wpdpi_runtime_stats'], [ 'deleted' => 0, 'kept' => 0 ] );
-        return [ 'deleted' => (int) $stats['deleted'], 'kept' => (int) $stats['kept'] ];
+        $stats = wp_parse_args( $GLOBALS['wpdpi_runtime_stats'], [ 'deleted' => 0, 'kept' => 0, 'queued' => 0 ] );
+        return [ 'deleted' => (int) $stats['deleted'], 'kept' => (int) $stats['kept'], 'queued' => (int) $stats['queued'] ];
     }
-    return [ 'deleted' => 0, 'kept' => 0 ];
+    return [ 'deleted' => 0, 'kept' => 0, 'queued' => 0 ];
 }
 
 /**
@@ -762,6 +783,18 @@ function wpdpi_on_deleted_post( int $post_id, $post = null ): void {
         return;
     }
 
+    $options = get_option( 'wpdpi_options', wpdpi_get_default_settings() );
+    $background = ! empty( $options['process_in_background'] );
+
+    if ( $background ) {
+        foreach ( $attachment_ids as $aid ) {
+            wpdpi_queue_attachment_for_cleanup( (int) $aid, (int) $post_id );
+        }
+        wpdpi_inc_stat( 'queued', count( $attachment_ids ) );
+        wpdpi_maybe_schedule_queue();
+        return;
+    }
+
     foreach ( $attachment_ids as $attachment_id ) {
         // Skip if attachment no longer exists or already deleted.
         $attachment = get_post( $attachment_id );
@@ -801,6 +834,83 @@ function wpdpi_on_deleted_post( int $post_id, $post = null ): void {
 }
 
 /**
+ * Queue helpers and processor for background cleanup.
+ */
+function wpdpi_get_queue(): array {
+    $queue = get_option( 'wpdpi_delete_queue', [] );
+    return is_array( $queue ) ? $queue : [];
+}
+
+function wpdpi_set_queue( array $queue ): void {
+    update_option( 'wpdpi_delete_queue', $queue, false );
+}
+
+function wpdpi_queue_attachment_for_cleanup( int $attachment_id, int $original_post_id ): void {
+    $queue   = wpdpi_get_queue();
+    $queue[] = [ 'attachment_id' => $attachment_id, 'original_post_id' => $original_post_id, 'queued_at' => time() ];
+    wpdpi_set_queue( $queue );
+}
+
+function wpdpi_maybe_schedule_queue(): void {
+    if ( ! wp_next_scheduled( 'wpdpi_process_queue_event' ) ) {
+        wp_schedule_single_event( time() + 10, 'wpdpi_process_queue_event' );
+    }
+}
+
+function wpdpi_process_queue(): void {
+    $queue = wpdpi_get_queue();
+    if ( empty( $queue ) ) {
+        return;
+    }
+
+    $batch_size = 25;
+    $processed  = 0;
+    $deleted    = 0;
+    $kept       = 0;
+    $remaining  = [];
+
+    foreach ( $queue as $item ) {
+        if ( $processed >= $batch_size ) {
+            $remaining[] = $item;
+            continue;
+        }
+        $processed++;
+
+        $aid = (int) ( $item['attachment_id'] ?? 0 );
+        $pid = (int) ( $item['original_post_id'] ?? 0 );
+        if ( $aid <= 0 ) {
+            continue;
+        }
+        $attachment = get_post( $aid );
+        if ( ! $attachment instanceof \WP_Post || 'attachment' !== $attachment->post_type ) {
+            continue;
+        }
+
+        $used_elsewhere = wpdpi_attachment_is_used_elsewhere( $aid, $pid );
+        $skip = (bool) apply_filters( 'wpdpi_skip_delete', $used_elsewhere, $aid, $pid );
+        if ( $skip ) {
+            $kept++;
+            continue;
+        }
+
+        do_action( 'wpdpi_before_delete_attachment', $aid, $pid );
+        wp_delete_attachment( $aid, true );
+        do_action( 'wpdpi_after_delete_attachment', $aid, $pid );
+        $deleted++;
+    }
+
+    wpdpi_set_queue( $remaining );
+
+    if ( ! empty( $remaining ) ) {
+        wp_schedule_single_event( time() + 30, 'wpdpi_process_queue_event' );
+    }
+
+    if ( $deleted || $kept ) {
+        set_transient( 'wpdpi_bg_summary', [ 'deleted' => $deleted, 'kept' => $kept, 'time' => time() ], MINUTE_IN_SECONDS * 5 );
+    }
+}
+
+/**
  * On request end, if we deleted or kept any attachments, store a transient
  * for the current user so we can render a summary notice after redirect.
  *
@@ -812,7 +922,7 @@ function wpdpi_store_deletion_notice(): void {
     }
 
     $stats = wpdpi_get_stats();
-    if ( empty( $stats['deleted'] ) && empty( $stats['kept'] ) ) {
+    if ( empty( $stats['deleted'] ) && empty( $stats['kept'] ) && empty( $stats['queued'] ) ) {
         return;
     }
 
@@ -825,6 +935,7 @@ function wpdpi_store_deletion_notice(): void {
     set_transient( 'wpdpi_notice_' . $user_id, [
         'deleted' => (int) $stats['deleted'],
         'kept'    => (int) $stats['kept'],
+        'queued'  => (int) $stats['queued'],
         'time'    => time(),
     ], MINUTE_IN_SECONDS );
 }
@@ -859,8 +970,9 @@ function wpdpi_render_deletion_notice(): void {
 
     $deleted = (int) ( $data['deleted'] ?? 0 );
     $kept    = (int) ( $data['kept'] ?? 0 );
+    $queued  = (int) ( $data['queued'] ?? 0 );
 
-    if ( $deleted <= 0 && $kept <= 0 ) {
+    if ( $deleted <= 0 && $kept <= 0 && $queued <= 0 ) {
         return;
     }
 
@@ -872,6 +984,10 @@ function wpdpi_render_deletion_notice(): void {
     if ( $kept > 0 ) {
         /* translators: %d: number of attachments kept */
         $parts[] = sprintf( _n( '%d attachment kept (still in use)', '%d attachments kept (still in use)', $kept, 'wp-delete-post-images' ), $kept );
+    }
+    if ( $queued > 0 ) {
+        /* translators: %d: number of attachments queued for background deletion */
+        $parts[] = sprintf( _n( '%d attachment queued for background cleanup', '%d attachments queued for background cleanup', $queued, 'wp-delete-post-images' ), $queued );
     }
 
     $message = implode( ' • ', $parts );
