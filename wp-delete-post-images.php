@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.4
+ * Version: 1.0.0.5
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -991,8 +991,24 @@ function wpdpi_admin_post_run_queue_now(): void {
     }
     check_admin_referer( 'wpdpi_run_queue_now' );
 
-    // Run a single budgeted batch to avoid server 503s.
-    wpdpi_process_queue();
+    // Run multiple budgeted batches within an overall time budget to make
+    // meaningful progress without tripping server limits.
+    $start         = microtime( true );
+    $overall_budget = (float) apply_filters( 'wpdpi_manual_run_max_duration_seconds', 12.0 );
+    $iterations    = 0;
+    while ( wpdpi_queue_count() > 0 && ( microtime( true ) - $start ) < $overall_budget ) {
+        wpdpi_process_queue();
+        $iterations++;
+        if ( $iterations >= 6 ) { // Safety cap
+            break;
+        }
+    }
+
+    // Ensure another background run is scheduled soon if items remain.
+    if ( wpdpi_queue_count() > 0 && ! wp_next_scheduled( 'wpdpi_process_queue_event' ) ) {
+        $delay = (int) apply_filters( 'wpdpi_queue_reschedule_delay', 20 );
+        wp_schedule_single_event( time() + $delay, 'wpdpi_process_queue_event' );
+    }
 
     // Redirect back to the posts list.
     $redirect = wp_get_referer();
