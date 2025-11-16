@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.5
+ * Version: 1.0.0.6
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -1061,7 +1061,8 @@ function wpdpi_render_deletion_notice(): void {
 
     // Only show on list table screens (edit.php) where it makes sense.
     $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-    if ( $screen && 'edit' !== $screen->base ) {
+    $allowed_bases = [ 'edit', 'upload' ];
+    if ( $screen && ! in_array( $screen->base, $allowed_bases, true ) ) {
         return;
     }
 
@@ -1119,13 +1120,38 @@ function wpdpi_render_deletion_notice(): void {
         }
     }
 
-    // Pending queue status with a Run Now link.
+    // Queue status: show on Posts and Media screens.
     $pending = wpdpi_queue_count();
-    if ( $pending > 0 ) {
-        $url = wp_nonce_url( admin_url( 'admin-post.php?action=wpdpi_run_queue_now' ), 'wpdpi_run_queue_now' );
-        /* translators: %d: number of items pending in the queue */
-        $text = sprintf( _n( '%d attachment pending background cleanup.', '%d attachments pending background cleanup.', $pending, 'wp-delete-post-images' ), $pending );
-        echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $text ) . ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Run now', 'wp-delete-post-images' ) . '</a></p></div>';
+    $locked  = (bool) get_transient( 'wpdpi_queue_lock' );
+    $next_ts = (int) wp_next_scheduled( 'wpdpi_process_queue_event' );
+    $last_ts = (int) get_option( 'wpdpi_queue_last_run', 0 );
+
+    if ( $locked || $pending > 0 ) {
+        $details = [];
+        if ( $pending > 0 ) {
+            /* translators: %d: number of items pending in the queue */
+            $details[] = sprintf( _n( '%d item pending', '%d items pending', $pending, 'wp-delete-post-images' ), $pending );
+        }
+        if ( $locked ) {
+            $details[] = __( 'processing now', 'wp-delete-post-images' );
+        } elseif ( $next_ts ) {
+            /* translators: %s: human time until next run */
+            $details[] = sprintf( __( 'next run in %s', 'wp-delete-post-images' ), human_time_diff( time(), $next_ts ) );
+        }
+        if ( $last_ts ) {
+            /* translators: %s: human time since last run */
+            $details[] = sprintf( __( 'last run %s ago', 'wp-delete-post-images' ), human_time_diff( $last_ts, time() ) );
+        }
+
+        $summary = implode( ' • ', $details );
+        $url     = wp_nonce_url( admin_url( 'admin-post.php?action=wpdpi_run_queue_now' ), 'wpdpi_run_queue_now' );
+
+        $class = $locked ? 'notice-info' : 'notice-warning';
+        echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html__( 'Delete Post Media background cleanup:', 'wp-delete-post-images' ) . ' ' . esc_html( $summary );
+        if ( ! $locked && $pending > 0 ) {
+            echo ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Run now', 'wp-delete-post-images' ) . '</a>';
+        }
+        echo '</p></div>';
     }
 }
 
