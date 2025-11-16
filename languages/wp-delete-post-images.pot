@@ -160,6 +160,18 @@ msgstr ""
 msgid "Run media cleanup in the background to avoid timeouts during bulk deletions. Recommended."
 msgstr ""
 
+msgid "Batch Size"
+msgstr ""
+
+msgid "Number of attachments to process per background run (1-200). Higher values process faster but may strain your server."
+msgstr ""
+
+msgid "Time Budget (seconds)"
+msgstr ""
+
+msgid "Maximum seconds to spend per background run (5-60). Longer allows more work but may timeout on slower servers."
+msgstr ""
+
 msgid "Save Settings"
 msgstr ""
 
@@ -204,7 +216,10 @@ msgstr ""
 msgid "Delete Post Media background cleanup:"
 msgstr ""
 
-msgid "Run now"
+msgid "(processing now)"
+msgstr ""
+
+msgid "(will process automatically per your settings)"
 msgstr ""
 
 msgid "Cleaning up media files…"

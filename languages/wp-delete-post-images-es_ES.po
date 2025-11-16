@@ -157,10 +157,22 @@ msgstr "El plugin realiza verificaciones conservadoras para evitar la pérdida a
 
 # Nuevos textos para procesamiento en segundo plano y estado de UI
 msgid "Process In Background"
-msgstr "Procesar en segundo plano"
+msgstr "Procesar en Segundo Plano"
 
 msgid "Run media cleanup in the background to avoid timeouts during bulk deletions. Recommended."
-msgstr "Ejecutar la limpieza de medios en segundo plano para evitar tiempos de espera durante eliminaciones masivas. Recomendado."
+msgstr "Ejecutar limpieza de medios en segundo plano para evitar tiempos de espera durante eliminaciones masivas. Recomendado."
+
+msgid "Batch Size"
+msgstr "Tamaño de Lote"
+
+msgid "Number of attachments to process per background run (1-200). Higher values process faster but may strain your server."
+msgstr "Número de adjuntos a procesar por ejecución en segundo plano (1-200). Valores más altos procesan más rápido pero pueden sobrecargar tu servidor."
+
+msgid "Time Budget (seconds)"
+msgstr "Presupuesto de Tiempo (segundos)"
+
+msgid "Maximum seconds to spend per background run (5-60). Longer allows more work but may timeout on slower servers."
+msgstr "Máximo de segundos a dedicar por ejecución en segundo plano (5-60). Mayor duración permite más trabajo pero puede agotar el tiempo en servidores lentos."
 
 msgid "Delete Post Media:"
 msgstr "Eliminar Medios:"
@@ -203,8 +215,11 @@ msgstr "última ejecución hace %s"
 msgid "Delete Post Media background cleanup:"
 msgstr "Limpieza en segundo plano de Eliminar Medios:"
 
-msgid "Run now"
-msgstr "Ejecutar ahora"
+msgid "(processing now)"
+msgstr "(procesando ahora)"
+
+msgid "(will process automatically per your settings)"
+msgstr "(se procesará automáticamente según tu configuración)"
 
 msgid "Cleaning up media files…"
 msgstr "Limpiando archivos multimedia…"
