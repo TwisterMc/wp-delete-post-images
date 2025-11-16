@@ -154,3 +154,60 @@ msgstr "Opcionalmente: meta de términos, opciones y comentarios (si están acti
 
 msgid "The plugin performs conservative checks to avoid accidental data loss. If any check suggests the file may be in use, it will not be deleted."
 msgstr "El plugin realiza verificaciones conservadoras para evitar la pérdida accidental de datos. Si alguna verificación sugiere que el archivo puede estar en uso, no se eliminará."
+
+# Nuevos textos para procesamiento en segundo plano y estado de UI
+msgid "Process In Background"
+msgstr "Procesar en segundo plano"
+
+msgid "Run media cleanup in the background to avoid timeouts during bulk deletions. Recommended."
+msgstr "Ejecutar la limpieza de medios en segundo plano para evitar tiempos de espera durante eliminaciones masivas. Recomendado."
+
+msgid "Delete Post Media:"
+msgstr "Eliminar Medios:"
+
+# Plurales de avisos
+msgid "%d unused attachment deleted"
+msgid_plural "%d unused attachments deleted"
+msgstr[0] "%d adjunto sin uso eliminado"
+msgstr[1] "%d adjuntos sin uso eliminados"
+
+msgid "%d attachment kept (still in use)"
+msgid_plural "%d attachments kept (still in use)"
+msgstr[0] "%d adjunto conservado (sigue en uso)"
+msgstr[1] "%d adjuntos conservados (siguen en uso)"
+
+msgid "%d attachment queued for background cleanup"
+msgid_plural "%d attachments queued for background cleanup"
+msgstr[0] "%d adjunto en cola para limpieza en segundo plano"
+msgstr[1] "%d adjuntos en cola para limpieza en segundo plano"
+
+msgid "%d unused attachment deleted (background)"
+msgid_plural "%d unused attachments deleted (background)"
+msgstr[0] "%d adjunto sin uso eliminado (segundo plano)"
+msgstr[1] "%d adjuntos sin uso eliminados (segundo plano)"
+
+msgid "%d item pending"
+msgid_plural "%d items pending"
+msgstr[0] "%d elemento pendiente"
+msgstr[1] "%d elementos pendientes"
+
+msgid "processing now"
+msgstr "procesando ahora"
+
+msgid "next run in %s"
+msgstr "siguiente ejecución en %s"
+
+msgid "last run %s ago"
+msgstr "última ejecución hace %s"
+
+msgid "Delete Post Media background cleanup:"
+msgstr "Limpieza en segundo plano de Eliminar Medios:"
+
+msgid "Run now"
+msgstr "Ejecutar ahora"
+
+msgid "Cleaning up media files…"
+msgstr "Limpiando archivos multimedia…"
+
+msgid "Sorry, you are not allowed to do this."
+msgstr "Lo siento, no tienes permiso para hacer esto."

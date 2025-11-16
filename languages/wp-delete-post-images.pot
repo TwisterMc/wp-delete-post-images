@@ -152,3 +152,63 @@ msgstr ""
 
 msgid "The plugin performs conservative checks to avoid accidental data loss. If any check suggests the file may be in use, it will not be deleted."
 msgstr ""
+
+# Additional strings added for background processing and UI feedback
+msgid "Process In Background"
+msgstr ""
+
+msgid "Run media cleanup in the background to avoid timeouts during bulk deletions. Recommended."
+msgstr ""
+
+msgid "Save Settings"
+msgstr ""
+
+msgid "Delete Post Media:"
+msgstr ""
+
+#: notices (pluralized)
+msgid "%d unused attachment deleted"
+msgid_plural "%d unused attachments deleted"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%d attachment kept (still in use)"
+msgid_plural "%d attachments kept (still in use)"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%d attachment queued for background cleanup"
+msgid_plural "%d attachments queued for background cleanup"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%d unused attachment deleted (background)"
+msgid_plural "%d unused attachments deleted (background)"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%d item pending"
+msgid_plural "%d items pending"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "processing now"
+msgstr ""
+
+msgid "next run in %s"
+msgstr ""
+
+msgid "last run %s ago"
+msgstr ""
+
+msgid "Delete Post Media background cleanup:"
+msgstr ""
+
+msgid "Run now"
+msgstr ""
+
+msgid "Cleaning up media files…"
+msgstr ""
+
+msgid "Sorry, you are not allowed to do this."
+msgstr ""
