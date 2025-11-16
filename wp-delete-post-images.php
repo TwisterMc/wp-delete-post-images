@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.3
+ * Version: 1.0.0.4
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -865,19 +865,34 @@ function wpdpi_maybe_schedule_queue(): void {
 }
 
 function wpdpi_process_queue(): void {
-    $queue = wpdpi_get_queue();
-    if ( empty( $queue ) ) {
+    // Acquire lock to avoid overlapping runs on busy servers.
+    if ( ! wpdpi_acquire_queue_lock() ) {
+        // If locked, try again shortly.
+        $delay = (int) apply_filters( 'wpdpi_queue_reschedule_delay', 60 );
+        if ( ! wp_next_scheduled( 'wpdpi_process_queue_event' ) ) {
+            wp_schedule_single_event( time() + $delay, 'wpdpi_process_queue_event' );
+        }
         return;
     }
 
-    $batch_size = 25;
+    $start      = microtime( true );
+    $time_budget = (float) apply_filters( 'wpdpi_queue_time_budget_seconds', 8.0 );
+    $batch_size = (int) apply_filters( 'wpdpi_queue_batch_size', 10 );
+
+    $queue = wpdpi_get_queue();
+    if ( empty( $queue ) ) {
+        wpdpi_release_queue_lock();
+        return;
+    }
+
     $processed  = 0;
     $deleted    = 0;
     $kept       = 0;
     $remaining  = [];
 
     foreach ( $queue as $item ) {
-        if ( $processed >= $batch_size ) {
+        // Stop if we hit batch limit or time budget.
+        if ( $processed >= $batch_size || ( microtime( true ) - $start ) >= $time_budget ) {
             $remaining[] = $item;
             continue;
         }
@@ -909,8 +924,12 @@ function wpdpi_process_queue(): void {
     wpdpi_set_queue( $remaining );
     update_option( 'wpdpi_queue_last_run', time(), false );
 
+    // Release lock before scheduling next run.
+    wpdpi_release_queue_lock();
+
     if ( ! empty( $remaining ) ) {
-        wp_schedule_single_event( time() + 30, 'wpdpi_process_queue_event' );
+        $delay = (int) apply_filters( 'wpdpi_queue_reschedule_delay', 30 );
+        wp_schedule_single_event( time() + $delay, 'wpdpi_process_queue_event' );
     }
 
     if ( $deleted || $kept ) {
@@ -924,6 +943,30 @@ function wpdpi_process_queue(): void {
 function wpdpi_queue_count(): int {
     $q = wpdpi_get_queue();
     return is_array( $q ) ? count( $q ) : 0;
+}
+
+/**
+ * Attempt to acquire a short-lived lock to prevent overlapping queue runs.
+ *
+ * @return bool True if lock acquired.
+ */
+function wpdpi_acquire_queue_lock(): bool {
+    $key = 'wpdpi_queue_lock';
+    if ( get_transient( $key ) ) {
+        return false;
+    }
+    // 2-minute lock; will auto-expire if something goes wrong.
+    set_transient( $key, 1, 2 * MINUTE_IN_SECONDS );
+    return true;
+}
+
+/**
+ * Release the queue lock.
+ *
+ * @return void
+ */
+function wpdpi_release_queue_lock(): void {
+    delete_transient( 'wpdpi_queue_lock' );
 }
 
 /**
@@ -948,12 +991,8 @@ function wpdpi_admin_post_run_queue_now(): void {
     }
     check_admin_referer( 'wpdpi_run_queue_now' );
 
-    // Process multiple batches to clear faster when user requests it.
-    $runs = 0;
-    while ( wpdpi_queue_count() > 0 && $runs < 5 ) {
-        wpdpi_process_queue();
-        $runs++;
-    }
+    // Run a single budgeted batch to avoid server 503s.
+    wpdpi_process_queue();
 
     // Redirect back to the posts list.
     $redirect = wp_get_referer();

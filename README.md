@@ -75,6 +75,18 @@ Only enable these if you store attachment URLs in these locations. May impact pe
 - When enabled, the plugin queues attachments for cleanup and processes them in small batches via WP-Cron, reducing the chance of HTTP timeouts when deleting many posts at once (including Empty Trash).
 - The first page load after enqueuing shows a notice indicating how many items were queued. As batches complete, items are deleted in the background.
 
+#### WP-Cron Notes
+
+- WordPress runs background tasks via WP-Cron when someone visits the site. If visits are infrequent or hosts restrict loopback requests, background jobs may be delayed.
+- If you see items “pending background cleanup,” either wait for normal traffic or click the “Run now” link in the notice to process a budgeted batch immediately.
+- You can also set up a real server cron to trigger WP-Cron regularly:
+
+```bash
+*/5 * * * * curl -s https://example.com/wp-cron.php?doing_wp_cron > /dev/null 2>&1
+```
+
+- Advanced: batch size and time budget are filterable via `wpdpi_queue_batch_size` and `wpdpi_queue_time_budget_seconds` for tuning on constrained hosts.
+
 ### Supported Post Types
 
 By default, all post types (except revisions, nav menu items, and attachments) trigger cleanup. Select specific post types to limit which posts are processed.
