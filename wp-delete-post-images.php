@@ -932,9 +932,7 @@ function wpdpi_process_queue(): void {
         wp_schedule_single_event( time() + $delay, 'wpdpi_process_queue_event' );
     }
 
-    if ( $deleted || $kept ) {
-        set_transient( 'wpdpi_bg_summary', [ 'deleted' => $deleted, 'kept' => $kept, 'time' => time() ], MINUTE_IN_SECONDS * 5 );
-    }
+    // No success banner stored; status is surfaced via the pending-count notice instead.
 }
 
 /**
@@ -1099,55 +1097,15 @@ function wpdpi_render_deletion_notice(): void {
         }
     }
 
-    // Background processor summary (independent of the per-request notice).
-    $bg = get_transient( 'wpdpi_bg_summary' );
-    if ( is_array( $bg ) ) {
-        delete_transient( 'wpdpi_bg_summary' );
-        $deleted = (int) ( $bg['deleted'] ?? 0 );
-        $kept    = (int) ( $bg['kept'] ?? 0 );
-        if ( $deleted > 0 || $kept > 0 ) {
-            $parts = [];
-            if ( $deleted > 0 ) {
-                /* translators: %d: number of attachments deleted */
-                $parts[] = sprintf( _n( '%d unused attachment deleted (background)', '%d unused attachments deleted (background)', $deleted, 'wp-delete-post-images' ), $deleted );
-            }
-            if ( $kept > 0 ) {
-                /* translators: %d: number of attachments kept */
-                $parts[] = sprintf( _n( '%d attachment kept (still in use)', '%d attachments kept (still in use)', $kept, 'wp-delete-post-images' ), $kept );
-            }
-            $message = implode( ' • ', $parts );
-            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Delete Post Media:', 'wp-delete-post-images' ) . ' ' . esc_html( $message ) . '</p></div>';
-        }
-    }
-
-    // Queue status: show on Posts and Media screens.
+    // Queue status: show a simple, less-noisy notice on Posts and Media screens.
     $pending = wpdpi_queue_count();
     $locked  = (bool) get_transient( 'wpdpi_queue_lock' );
-    $next_ts = (int) wp_next_scheduled( 'wpdpi_process_queue_event' );
-    $last_ts = (int) get_option( 'wpdpi_queue_last_run', 0 );
-
-    if ( $locked || $pending > 0 ) {
-        $details = [];
-        if ( $pending > 0 ) {
-            /* translators: %d: number of items pending in the queue */
-            $details[] = sprintf( _n( '%d item pending', '%d items pending', $pending, 'wp-delete-post-images' ), $pending );
-        }
-        if ( $locked ) {
-            $details[] = __( 'processing now', 'wp-delete-post-images' );
-        } elseif ( $next_ts ) {
-            /* translators: %s: human time until next run */
-            $details[] = sprintf( __( 'next run in %s', 'wp-delete-post-images' ), human_time_diff( time(), $next_ts ) );
-        }
-        if ( $last_ts ) {
-            /* translators: %s: human time since last run */
-            $details[] = sprintf( __( 'last run %s ago', 'wp-delete-post-images' ), human_time_diff( $last_ts, time() ) );
-        }
-
-        $summary = implode( ' • ', $details );
-        $url     = wp_nonce_url( admin_url( 'admin-post.php?action=wpdpi_run_queue_now' ), 'wpdpi_run_queue_now' );
-
+    if ( $pending > 0 || $locked ) {
+        /* translators: %d: number of items pending in the queue */
+        $text = sprintf( _n( '%d item pending', '%d items pending', $pending, 'wp-delete-post-images' ), max( 0, (int) $pending ) );
+        $url  = wp_nonce_url( admin_url( 'admin-post.php?action=wpdpi_run_queue_now' ), 'wpdpi_run_queue_now' );
         $class = $locked ? 'notice-info' : 'notice-warning';
-        echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html__( 'Delete Post Media background cleanup:', 'wp-delete-post-images' ) . ' ' . esc_html( $summary );
+        echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html__( 'Delete Post Media background cleanup:', 'wp-delete-post-images' ) . ' ' . esc_html( $text );
         if ( ! $locked && $pending > 0 ) {
             echo ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Run now', 'wp-delete-post-images' ) . '</a>';
         }
