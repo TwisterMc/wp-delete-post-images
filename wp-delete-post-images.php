@@ -1130,9 +1130,14 @@ function wpdpi_enqueue_admin_indicator(): void {
 
     // Ensure jQuery is present, then attach inline script.
     wp_enqueue_script( 'jquery-core' );
+    
+    $options = get_option( 'wpdpi_options', wpdpi_get_default_settings() );
+    $background_enabled = ! empty( $options['process_in_background'] );
+    
     wp_localize_script( 'jquery-core', 'wpdpiIndicator', [
         /* translators: progress message while deleting posts */
         'message' => __( 'Cleaning up media files…', 'wp-delete-post-images' ),
+        'backgroundEnabled' => $background_enabled,
     ] );
 
     $js = <<<'JS'
@@ -1141,6 +1146,7 @@ jQuery(function($){
     var css = '<style id="wpdpi-overlay-style">#wpdpi-overlay{position:fixed;inset:0;background:rgba(255,255,255,.7);z-index:999999;display:none;align-items:center;justify-content:center}#wpdpi-overlay .wpdpi-box{background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.1);display:flex;align-items:center;gap:10px;font-size:14px;color:#1d2327}#wpdpi-overlay .wpdpi-spinner{width:18px;height:18px;border:2px solid #2271b1;border-right-color:transparent;border-radius:50%;animation:wpdpi-spin .6s linear infinite}@keyframes wpdpi-spin{to{transform:rotate(360deg)}}</style>';
     $('head').append(css);
     $('body').append(overlay);
+    var bgEnabled = window.wpdpiIndicator && wpdpiIndicator.backgroundEnabled;
     function showOverlay(text){
         $('#wpdpi-overlay .wpdpi-text').text(text || (window.wpdpiIndicator ? wpdpiIndicator.message : 'Cleaning up…'));
         $('#wpdpi-overlay').css('display','flex');
@@ -1159,14 +1165,16 @@ jQuery(function($){
             showOverlay();
         }
     });
-    // Empty Trash: catch various markup (button/input/link) and form submits
-    $(document).on('click', '#delete_all, #empty-trash, a#delete_all, a.page-title-action[href*="delete_all"]', function(){ showOverlay(); });
-    $('#posts-filter').on('submit', function(){
-        var $active = $(document.activeElement);
-        if ($active.is('#delete_all, #empty-trash') || $active.attr('name')==='delete_all') {
-            showOverlay();
-        }
-    });
+    // Empty Trash: skip overlay if background processing is on (queuing is fast)
+    if (!bgEnabled) {
+        $(document).on('click', '#delete_all, #empty-trash, a#delete_all, a.page-title-action[href*="delete_all"]', function(){ showOverlay(); });
+        $('#posts-filter').on('submit', function(){
+            var $active = $(document.activeElement);
+            if ($active.is('#delete_all, #empty-trash') || $active.attr('name')==='delete_all') {
+                showOverlay();
+            }
+        });
+    }
     // Bulk actions top/bottom
     $(document).on('click', '#doaction, #doaction2', function(){ maybeShowForBulk(); });
 });
