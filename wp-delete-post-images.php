@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.7
+ * Version: 1.0.0.8
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
