@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.6
+ * Version: 1.0.0.7
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -273,6 +273,38 @@ function wpdpi_register_settings(): void {
     );
 
     add_settings_field(
+        'queue_batch_size',
+        __( 'Batch Size', 'wp-delete-post-images' ),
+        'wpdpi_render_number_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_queue_batch_size',
+            'option_name' => $option_name,
+            'field_key'   => 'queue_batch_size',
+            'min'         => 1,
+            'max'         => 200,
+            'description' => __( 'Number of attachments to process per background run (1-200). Higher values process faster but may strain your server.', 'wp-delete-post-images' ),
+        ]
+    );
+
+    add_settings_field(
+        'queue_time_budget',
+        __( 'Time Budget (seconds)', 'wp-delete-post-images' ),
+        'wpdpi_render_number_field',
+        'wpdpi-settings',
+        'wpdpi_performance_section',
+        [
+            'label_for'   => 'wpdpi_queue_time_budget',
+            'option_name' => $option_name,
+            'field_key'   => 'queue_time_budget',
+            'min'         => 5,
+            'max'         => 60,
+            'description' => __( 'Maximum seconds to spend per background run (5-60). Longer allows more work but may timeout on slower servers.', 'wp-delete-post-images' ),
+        ]
+    );
+
+    add_settings_field(
         'enable_content_regex',
         __( 'Scan Post Content (REGEXP)', 'wp-delete-post-images' ),
         'wpdpi_render_checkbox_field',
@@ -428,7 +460,9 @@ function wpdpi_register_settings(): void {
  */
 function wpdpi_get_default_settings(): array {
     return [
-        'process_in_background'  => true,
+        'process_in_background'    => true,
+        'queue_batch_size'         => 50,
+        'queue_time_budget'        => 15,
         'enable_content_regex'     => true,
         'enable_filename_like'     => true,
         'enable_postmeta_id_scan'  => true,
@@ -466,6 +500,15 @@ function wpdpi_sanitize_settings( $input ): array {
     foreach ( $bool_fields as $field ) {
         $sanitized[ $field ] = ! empty( $input[ $field ] );
     }
+
+    // Sanitize numeric fields.
+    $sanitized['queue_batch_size'] = isset( $input['queue_batch_size'] ) 
+        ? max( 1, min( 200, (int) $input['queue_batch_size'] ) ) 
+        : 50;
+    
+    $sanitized['queue_time_budget'] = isset( $input['queue_time_budget'] ) 
+        ? max( 5, min( 60, (int) $input['queue_time_budget'] ) ) 
+        : 15;
 
     // Sanitize post types array.
     $sanitized['supported_post_types'] = [];
@@ -547,6 +590,41 @@ function wpdpi_render_checkbox_field( array $args ): void {
         esc_attr( $field_key ),
         checked( $checked, true, false ),
         esc_html__( 'Enable', 'wp-delete-post-images' )
+    );
+
+    if ( $description ) {
+        printf(
+            '<p class="description">%s</p>',
+            esc_html( $description )
+        );
+    }
+}
+
+/**
+ * Render a number field.
+ *
+ * @param array<string,mixed> $args Field arguments.
+ * @return void
+ */
+function wpdpi_render_number_field( array $args ): void {
+    $option_name = $args['option_name'];
+    $field_key   = $args['field_key'];
+    $options     = get_option( $option_name, wpdpi_get_default_settings() );
+    $defaults    = wpdpi_get_default_settings();
+    $value       = isset( $options[ $field_key ] ) ? (int) $options[ $field_key ] : $defaults[ $field_key ];
+    $id          = $args['label_for'];
+    $description = $args['description'] ?? '';
+    $min         = $args['min'] ?? 1;
+    $max         = $args['max'] ?? 100;
+
+    printf(
+        '<input type="number" id="%s" name="%s[%s]" value="%d" min="%d" max="%d" class="small-text" />',
+        esc_attr( $id ),
+        esc_attr( $option_name ),
+        esc_attr( $field_key ),
+        (int) $value,
+        (int) $min,
+        (int) $max
     );
 
     if ( $description ) {
@@ -876,8 +954,9 @@ function wpdpi_process_queue(): void {
     }
 
     $start      = microtime( true );
-    $time_budget = (float) apply_filters( 'wpdpi_queue_time_budget_seconds', 8.0 );
-    $batch_size = (int) apply_filters( 'wpdpi_queue_batch_size', 10 );
+    $options    = get_option( 'wpdpi_options', wpdpi_get_default_settings() );
+    $time_budget = (float) apply_filters( 'wpdpi_queue_time_budget_seconds', (float) ( $options['queue_time_budget'] ?? 15 ) );
+    $batch_size = (int) apply_filters( 'wpdpi_queue_batch_size', (int) ( $options['queue_batch_size'] ?? 50 ) );
 
     $queue = wpdpi_get_queue();
     if ( empty( $queue ) ) {
