@@ -1244,16 +1244,16 @@ jQuery(function($){
             showOverlay();
         }
     });
-    // Empty Trash: skip overlay if background processing is on (queuing is fast)
-    if (!bgEnabled) {
-        $(document).on('click', '#delete_all, #empty-trash, a#delete_all, a.page-title-action[href*="delete_all"]', function(){ showOverlay(); });
-        $('#posts-filter').on('submit', function(){
-            var $active = $(document.activeElement);
-            if ($active.is('#delete_all, #empty-trash') || $active.attr('name')==='delete_all') {
-                showOverlay();
-            }
-        });
-    }
+    // Empty Trash: always show brief feedback (queuing or processing message)
+    $(document).on('click', '#delete_all, #empty-trash, a#delete_all, a.page-title-action[href*="delete_all"]', function(){ 
+        showOverlay(bgEnabled ? 'Queuing media cleanup…' : undefined);
+    });
+    $('#posts-filter').on('submit', function(){
+        var $active = $(document.activeElement);
+        if ($active.is('#delete_all, #empty-trash') || $active.attr('name')==='delete_all') {
+            showOverlay(bgEnabled ? 'Queuing media cleanup…' : undefined);
+        }
+    });
     // Bulk actions top/bottom
     $(document).on('click', '#doaction, #doaction2', function(){ maybeShowForBulk(); });
 });
