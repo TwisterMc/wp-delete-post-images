@@ -1181,14 +1181,12 @@ function wpdpi_render_deletion_notice(): void {
     $locked  = (bool) get_transient( 'wpdpi_queue_lock' );
     if ( $pending > 0 || $locked ) {
         /* translators: %d: number of items pending in the queue */
-        $text = sprintf( _n( '%d item pending', '%d items pending', $pending, 'wp-delete-post-images' ), max( 0, (int) $pending ) );
-        $url  = wp_nonce_url( admin_url( 'admin-post.php?action=wpdpi_run_queue_now' ), 'wpdpi_run_queue_now' );
+        $pending_text = sprintf( _n( '%d item pending', '%d items pending', $pending, 'wp-delete-post-images' ), max( 0, (int) $pending ) );
+        $message = $locked 
+            ? $pending_text . ' ' . esc_html__( '(processing now)', 'wp-delete-post-images' )
+            : $pending_text . ' ' . esc_html__( '(will process automatically per your settings)', 'wp-delete-post-images' );
         $class = $locked ? 'notice-info' : 'notice-warning';
-        echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html__( 'Delete Post Media background cleanup:', 'wp-delete-post-images' ) . ' ' . esc_html( $text );
-        if ( ! $locked && $pending > 0 ) {
-            echo ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Run now', 'wp-delete-post-images' ) . '</a>';
-        }
-        echo '</p></div>';
+        echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html__( 'Delete Post Media background cleanup:', 'wp-delete-post-images' ) . ' ' . esc_html( $message ) . '</p></div>';
     }
 }
 
