@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.2
+ * Version: 1.0.0.3
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -67,6 +67,13 @@ add_action( 'admin_enqueue_scripts', 'wpdpi_enqueue_admin_indicator' );
  * Background queue processor hook.
  */
 add_action( 'wpdpi_process_queue_event', 'wpdpi_process_queue' );
+
+/**
+ * Admin tick: if items are queued and no cron scheduled, re-schedule.
+ * Also prepares Run Now admin-post handler.
+ */
+add_action( 'admin_init', 'wpdpi_admin_tick_queue' );
+add_action( 'admin_post_wpdpi_run_queue_now', 'wpdpi_admin_post_run_queue_now' );
 
 /**
  * Register admin settings page.
@@ -900,6 +907,7 @@ function wpdpi_process_queue(): void {
     }
 
     wpdpi_set_queue( $remaining );
+    update_option( 'wpdpi_queue_last_run', time(), false );
 
     if ( ! empty( $remaining ) ) {
         wp_schedule_single_event( time() + 30, 'wpdpi_process_queue_event' );
@@ -908,6 +916,52 @@ function wpdpi_process_queue(): void {
     if ( $deleted || $kept ) {
         set_transient( 'wpdpi_bg_summary', [ 'deleted' => $deleted, 'kept' => $kept, 'time' => time() ], MINUTE_IN_SECONDS * 5 );
     }
+}
+
+/**
+ * Return pending queue count.
+ */
+function wpdpi_queue_count(): int {
+    $q = wpdpi_get_queue();
+    return is_array( $q ) ? count( $q ) : 0;
+}
+
+/**
+ * Ensure a scheduled event exists if there are pending items.
+ */
+function wpdpi_admin_tick_queue(): void {
+    if ( ! is_admin() ) {
+        return;
+    }
+    $pending = wpdpi_queue_count();
+    if ( $pending > 0 && ! wp_next_scheduled( 'wpdpi_process_queue_event' ) ) {
+        wp_schedule_single_event( time() + 15, 'wpdpi_process_queue_event' );
+    }
+}
+
+/**
+ * Process the queue immediately via admin-post action.
+ */
+function wpdpi_admin_post_run_queue_now(): void {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( esc_html__( 'Sorry, you are not allowed to do this.', 'wp-delete-post-images' ) );
+    }
+    check_admin_referer( 'wpdpi_run_queue_now' );
+
+    // Process multiple batches to clear faster when user requests it.
+    $runs = 0;
+    while ( wpdpi_queue_count() > 0 && $runs < 5 ) {
+        wpdpi_process_queue();
+        $runs++;
+    }
+
+    // Redirect back to the posts list.
+    $redirect = wp_get_referer();
+    if ( ! $redirect ) {
+        $redirect = admin_url( 'edit.php' );
+    }
+    wp_safe_redirect( $redirect );
+    exit;
 }
 
 /**
@@ -961,38 +1015,63 @@ function wpdpi_render_deletion_notice(): void {
         return;
     }
 
+    // Primary per-request summary (queued/deleted/kept after a delete action).
     $data = get_transient( 'wpdpi_notice_' . $user_id );
-    if ( ! is_array( $data ) ) {
-        return;
+    if ( is_array( $data ) ) {
+        delete_transient( 'wpdpi_notice_' . $user_id );
+
+        $deleted = (int) ( $data['deleted'] ?? 0 );
+        $kept    = (int) ( $data['kept'] ?? 0 );
+        $queued  = (int) ( $data['queued'] ?? 0 );
+
+        if ( $deleted > 0 || $kept > 0 || $queued > 0 ) {
+            $parts = [];
+            if ( $deleted > 0 ) {
+                /* translators: %d: number of attachments deleted */
+                $parts[] = sprintf( _n( '%d unused attachment deleted', '%d unused attachments deleted', $deleted, 'wp-delete-post-images' ), $deleted );
+            }
+            if ( $kept > 0 ) {
+                /* translators: %d: number of attachments kept */
+                $parts[] = sprintf( _n( '%d attachment kept (still in use)', '%d attachments kept (still in use)', $kept, 'wp-delete-post-images' ), $kept );
+            }
+            if ( $queued > 0 ) {
+                /* translators: %d: number of attachments queued for background deletion */
+                $parts[] = sprintf( _n( '%d attachment queued for background cleanup', '%d attachments queued for background cleanup', $queued, 'wp-delete-post-images' ), $queued );
+            }
+            $message = implode( ' • ', $parts );
+            echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Delete Post Media:', 'wp-delete-post-images' ) . ' ' . esc_html( $message ) . '</p></div>';
+        }
     }
 
-    delete_transient( 'wpdpi_notice_' . $user_id );
-
-    $deleted = (int) ( $data['deleted'] ?? 0 );
-    $kept    = (int) ( $data['kept'] ?? 0 );
-    $queued  = (int) ( $data['queued'] ?? 0 );
-
-    if ( $deleted <= 0 && $kept <= 0 && $queued <= 0 ) {
-        return;
+    // Background processor summary (independent of the per-request notice).
+    $bg = get_transient( 'wpdpi_bg_summary' );
+    if ( is_array( $bg ) ) {
+        delete_transient( 'wpdpi_bg_summary' );
+        $deleted = (int) ( $bg['deleted'] ?? 0 );
+        $kept    = (int) ( $bg['kept'] ?? 0 );
+        if ( $deleted > 0 || $kept > 0 ) {
+            $parts = [];
+            if ( $deleted > 0 ) {
+                /* translators: %d: number of attachments deleted */
+                $parts[] = sprintf( _n( '%d unused attachment deleted (background)', '%d unused attachments deleted (background)', $deleted, 'wp-delete-post-images' ), $deleted );
+            }
+            if ( $kept > 0 ) {
+                /* translators: %d: number of attachments kept */
+                $parts[] = sprintf( _n( '%d attachment kept (still in use)', '%d attachments kept (still in use)', $kept, 'wp-delete-post-images' ), $kept );
+            }
+            $message = implode( ' • ', $parts );
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Delete Post Media:', 'wp-delete-post-images' ) . ' ' . esc_html( $message ) . '</p></div>';
+        }
     }
 
-    $parts = [];
-    if ( $deleted > 0 ) {
-        /* translators: %d: number of attachments deleted */
-        $parts[] = sprintf( _n( '%d unused attachment deleted', '%d unused attachments deleted', $deleted, 'wp-delete-post-images' ), $deleted );
+    // Pending queue status with a Run Now link.
+    $pending = wpdpi_queue_count();
+    if ( $pending > 0 ) {
+        $url = wp_nonce_url( admin_url( 'admin-post.php?action=wpdpi_run_queue_now' ), 'wpdpi_run_queue_now' );
+        /* translators: %d: number of items pending in the queue */
+        $text = sprintf( _n( '%d attachment pending background cleanup.', '%d attachments pending background cleanup.', $pending, 'wp-delete-post-images' ), $pending );
+        echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $text ) . ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Run now', 'wp-delete-post-images' ) . '</a></p></div>';
     }
-    if ( $kept > 0 ) {
-        /* translators: %d: number of attachments kept */
-        $parts[] = sprintf( _n( '%d attachment kept (still in use)', '%d attachments kept (still in use)', $kept, 'wp-delete-post-images' ), $kept );
-    }
-    if ( $queued > 0 ) {
-        /* translators: %d: number of attachments queued for background deletion */
-        $parts[] = sprintf( _n( '%d attachment queued for background cleanup', '%d attachments queued for background cleanup', $queued, 'wp-delete-post-images' ), $queued );
-    }
-
-    $message = implode( ' • ', $parts );
-
-    echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Delete Post Media:', 'wp-delete-post-images' ) . ' ' . esc_html( $message ) . '</p></div>';
 }
 
 /**
