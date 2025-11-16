@@ -1148,10 +1148,17 @@ jQuery(function($){
     function maybeShowForBulk(){
         var val1 = $('select[name="action"]').val();
         var val2 = $('select[name="action2"]').val();
-        if (val1==='delete' || val2==='delete' || val1==='trash' || val2==='trash') { showOverlay(); }
+        // Only show for permanent delete, not move to trash
+        if (val1==='delete' || val2==='delete') { showOverlay(); }
     }
     // Row actions: Trash/Delete Permanently links
-    $(document).on('click', 'a.submitdelete', function(){ showOverlay(); });
+    $(document).on('click', 'a.submitdelete', function(){
+        var href = $(this).attr('href') || '';
+        // Show only for permanent deletion links
+        if (href.indexOf('action=delete') !== -1 || href.indexOf('delete=1') !== -1) {
+            showOverlay();
+        }
+    });
     // Empty Trash: catch various markup (button/input/link) and form submits
     $(document).on('click', '#delete_all, #empty-trash, a#delete_all, a.page-title-action[href*="delete_all"]', function(){ showOverlay(); });
     $('#posts-filter').on('submit', function(){
