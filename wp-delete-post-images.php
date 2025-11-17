@@ -3,7 +3,7 @@
  * Plugin Name: Delete Attached Media on Post Deletion
  * Plugin URI: https://github.com/TwisterMc/wp-delete-post-images
  * Description: When a post is permanently deleted, also deletes its attached media if they are not used anywhere else on the site.
- * Version: 1.0.0.8
+ * Version: 1.0.0.9
  * Author: Thomas McMahon
  * Text Domain: wp-delete-post-images
  * Domain Path: /languages
@@ -872,9 +872,8 @@ function wpdpi_on_deleted_post( int $post_id, $post = null ): void {
     $background = ! empty( $options['process_in_background'] );
 
     if ( $background ) {
-        foreach ( $attachment_ids as $aid ) {
-            wpdpi_queue_attachment_for_cleanup( (int) $aid, (int) $post_id );
-        }
+        // Batch queue all attachments at once instead of one-by-one to avoid timeout on large trash operations.
+        wpdpi_queue_attachments_batch( $attachment_ids, $post_id );
         wpdpi_inc_stat( 'queued', count( $attachment_ids ) );
         wpdpi_maybe_schedule_queue();
         return;
@@ -933,6 +932,32 @@ function wpdpi_set_queue( array $queue ): void {
 function wpdpi_queue_attachment_for_cleanup( int $attachment_id, int $original_post_id ): void {
     $queue   = wpdpi_get_queue();
     $queue[] = [ 'attachment_id' => $attachment_id, 'original_post_id' => $original_post_id, 'queued_at' => time() ];
+    wpdpi_set_queue( $queue );
+}
+
+/**
+ * Queue multiple attachments for cleanup in a single operation (performance).
+ *
+ * @param array<int> $attachment_ids Array of attachment IDs.
+ * @param int        $original_post_id The deleted post ID.
+ * @return void
+ */
+function wpdpi_queue_attachments_batch( array $attachment_ids, int $original_post_id ): void {
+    if ( empty( $attachment_ids ) ) {
+        return;
+    }
+    
+    $queue = wpdpi_get_queue();
+    $now   = time();
+    
+    foreach ( $attachment_ids as $aid ) {
+        $queue[] = [
+            'attachment_id'   => (int) $aid,
+            'original_post_id' => (int) $original_post_id,
+            'queued_at'       => $now,
+        ];
+    }
+    
     wpdpi_set_queue( $queue );
 }
 
